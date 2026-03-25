@@ -108,6 +108,32 @@ def _all_invoices() -> list:
     return records
 
 
+def _build_team_assignments(team_members: list, product_spec: dict) -> list:
+    """
+    Create simple task assignments from Product spec features.
+    Assignment rule: sort members by hours desc, then round-robin features.
+    """
+    features = product_spec.get("features") or product_spec.get("core_features_ranked") or []
+    if not team_members or not features:
+        return []
+
+    members = sorted(team_members, key=lambda m: float(m.get("hours_worked", 0)), reverse=True)
+    assignments = []
+    for idx, feat in enumerate(features):
+        member = members[idx % len(members)]
+        assignments.append(
+            {
+                "member_name": member.get("name", ""),
+                "member_role": member.get("role", ""),
+                "member_hours": member.get("hours_worked", 0),
+                "task_name": feat.get("name", ""),
+                "task_description": feat.get("description", ""),
+                "priority": feat.get("priority", ""),
+            }
+        )
+    return assignments
+
+
 def _invoice_to_record(inv):
     """Convert InvoiceRecord object to a plain dict for storage."""
     return {
@@ -223,6 +249,7 @@ def submit():
         days_until_due=int(f.get("days_due", 14)),
     )
     record = _invoice_to_record(inv)
+    record["project_description"] = development_request
     _save(record)
 
     do_email  = "send_email"  in f
@@ -308,6 +335,7 @@ def submit():
                 eng = result.get("agent_outputs", {}).get("engineer", {}) or {}
                 mkt = result.get("agent_outputs", {}).get("marketing", {}) or {}
                 qa  = result.get("qa", {}) or {}
+                product = result.get("agent_outputs", {}).get("product", {}) or {}
 
                 # Mark all agents done (QA runs inside ceo.run, not via _run_with_review)
                 state["agent_done"]["product"] = True
@@ -338,6 +366,10 @@ def submit():
                 rec["pr_url"]    = state["pr_url"]
                 rec["issue_url"] = state["issue_url"]
                 rec["agent_log"] = result.get("decision_log_path", "")
+                rec["product_spec"] = product
+                rec["team_assignments"] = _build_team_assignments(
+                    rec.get("team_members", []), product
+                )
                 _save(rec)
             except Exception as exc:
                 state["agent_error"] = str(exc)

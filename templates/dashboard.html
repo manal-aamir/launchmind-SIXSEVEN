@@ -34,6 +34,50 @@
     {% endif %}
   </div>
 
+  {% if inv.project_description %}
+  <div style="margin:10px 0 14px;font-size:13px;color:#cbd5e1;background:rgba(15,23,42,.45);border:1px solid rgba(148,163,184,.18);border-radius:10px;padding:10px 12px">
+    <strong style="color:#f1f5f9">Project Description:</strong>
+    <span style="color:#94a3b8">{{ inv.project_description }}</span>
+  </div>
+  {% endif %}
+
+  {% if inv.team_members %}
+  <details style="margin-bottom:12px">
+    <summary style="cursor:pointer;color:#94a3b8;font-size:13px">Entered team members</summary>
+    <table style="margin-top:8px">
+      <tr><th>Name</th><th>Role</th><th>Email</th><th>Hours</th></tr>
+      {% for m in inv.team_members %}
+      <tr>
+        <td>{{ m.name }}</td>
+        <td style="color:#94a3b8">{{ m.role }}</td>
+        <td style="color:#94a3b8">{{ m.email }}</td>
+        <td>{{ m.hours_worked }}h</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </details>
+  {% endif %}
+
+  {% if inv.team_assignments %}
+  <details style="margin-bottom:14px">
+    <summary style="cursor:pointer;color:#94a3b8;font-size:13px">Product-agent task assignments</summary>
+    <table style="margin-top:8px">
+      <tr><th>Member</th><th>Role</th><th>Assigned task</th><th>Priority</th></tr>
+      {% for a in inv.team_assignments %}
+      <tr>
+        <td>{{ a.member_name }}</td>
+        <td style="color:#94a3b8">{{ a.member_role }}</td>
+        <td>
+          <div style="font-weight:600">{{ a.task_name }}</div>
+          <div style="font-size:12px;color:#94a3b8">{{ a.task_description }}</div>
+        </td>
+        <td>{{ a.priority }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </details>
+  {% endif %}
+
   <!-- Payment splits -->
   {% if inv.payment_splits %}
   <details style="margin-bottom:14px">
