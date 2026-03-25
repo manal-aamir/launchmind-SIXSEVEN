@@ -216,6 +216,12 @@ def build():
         if str(d or "").strip()
     ] or [LineItem(description=development_request[:120], quantity=1, unit_price=0)]
 
+    # If the user added multiple items but left prices as 0, the invoice looks "empty".
+    # Require at least one positive-priced item unless they intentionally leave only the fallback item.
+    if items and all((it.total <= 0) for it in items):
+        flash("Your invoice totals $0.00. Please enter a Unit Price for at least one item.", "error")
+        return redirect(url_for("index"))
+
     # Parse team members + hours (fallback to 1 placeholder member)
     names  = f.getlist("member_name[]")
     roles  = f.getlist("member_role[]")
@@ -256,8 +262,8 @@ def build():
         email_copy = groq_client.write_invoice_email(
             project_name=project_name,
             client_name=client_name,
-            total_amount=0,
-            currency="USD",
+            total_amount=inv.total_amount,
+            currency=inv.currency,
             due_date=inv.due_date,
             invoice_id=invoice_id,
             line_items=record["line_items"],
@@ -323,6 +329,13 @@ def build():
                 eng = result["agent_outputs"].get("engineer", {})
                 mkt = result["agent_outputs"].get("marketing", {})
                 qa  = result.get("qa", {})
+
+                # Mark QA as done once CEO run completes (QA happens inside ceo.run)
+                state["agent_done"]["qa"] = True
+                state["agent_done"]["marketing"] = True
+                state["agent_done"]["engineer"] = True
+                state["agent_done"]["product"] = True
+                state["agent_done"]["ceo"] = True
 
                 state["pr_url"]          = eng.get("pr_url", "")
                 state["issue_url"]       = eng.get("issue_url", "")
