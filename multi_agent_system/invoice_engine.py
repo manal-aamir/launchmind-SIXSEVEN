@@ -107,7 +107,7 @@ class InvoiceEngine:
         invoice.calculate_splits()
         return invoice
 
-    def generate_html(self, inv: InvoiceRecord) -> str:
+    def generate_html(self, inv: InvoiceRecord, include_internal_split: bool = False) -> str:
         subtotal = inv.total_amount
         gst      = round(subtotal * 0.10, 2)
         total    = round(subtotal + gst, 2)
@@ -137,6 +137,14 @@ class InvoiceEngine:
               <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:center">{data['percentage']}%</td>
               <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:right;color:#16a34a;font-weight:700">${data['amount']:,.2f}</td>
             </tr>"""
+
+        internal_split_html = (
+            '<div class="split-section"><h3>🔒 Internal Payment Split — Confidential (not sent to client)</h3>'
+            '<table class="split"><thead><tr><th>Name</th><th>Role</th><th style="text-align:center">Hours</th>'
+            '<th style="text-align:center">Share</th><th style="text-align:right">Amount</th></tr></thead><tbody>'
+            + split_rows
+            + '</tbody></table></div>'
+        ) if (include_internal_split and inv.payment_splits) else ""
 
         return f"""<!doctype html>
 <html lang="en">
@@ -309,8 +317,8 @@ class InvoiceEngine:
     </div>
   </div>
 
-  <!-- Internal split (confidential) -->
-  {'<div class="split-section"><h3>🔒 Internal Payment Split — Confidential (not sent to client)</h3><table class="split"><thead><tr><th>Name</th><th>Role</th><th style="text-align:center">Hours</th><th style="text-align:center">Share</th><th style="text-align:right">Amount</th></tr></thead><tbody>' + split_rows + '</tbody></table></div>' if inv.payment_splits else ''}
+  <!-- Internal split (confidential, internal only) -->
+  {internal_split_html}
 
   <!-- Footer -->
   <div class="footer">

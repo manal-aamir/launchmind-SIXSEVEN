@@ -136,7 +136,7 @@
 <!-- ── Main form ── -->
 <div class="form-wrap">
   <div class="card">
-    <h2>Submit Your Build Request</h2>
+    <h2>CEO Console — Build Request + Invoice</h2>
 
     <form method="POST" action="/build">
 
@@ -167,6 +167,52 @@
         </div>
       </div>
 
+      <!-- Invoice items (what will be billed to the client) -->
+      <label style="margin-top:22px">Invoice Items (billed to client)</label>
+      <div id="items-container" style="margin-top:8px">
+        <div class="row-group" style="border:1px solid #334155;border-radius:10px;padding:12px;background:#0f172a;margin-bottom:10px">
+          <label style="margin-top:0">Description</label>
+          <input name="item_desc[]" required placeholder="e.g. Landing page design + development">
+          <div class="grid2">
+            <div>
+              <label>Quantity</label>
+              <input name="item_qty[]" type="number" value="1" min="0.01" step="0.01">
+            </div>
+            <div>
+              <label>Unit Price (USD)</label>
+              <input name="item_price[]" type="number" value="500" min="0" step="0.01">
+            </div>
+          </div>
+        </div>
+      </div>
+      <button type="button" class="btn-submit" style="background:#334155;color:#e2e8f0;margin-top:8px" onclick="addItem()">+ Add item</button>
+
+      <!-- Team members + hours (internal split basis) -->
+      <label style="margin-top:22px">Team Members & Hours (internal split)</label>
+      <div id="team-container" style="margin-top:8px">
+        <div class="row-group" style="border:1px solid #334155;border-radius:10px;padding:12px;background:#0f172a;margin-bottom:10px">
+          <div class="grid2">
+            <div>
+              <label style="margin-top:0">Name</label>
+              <input name="member_name[]" required placeholder="Aqsa">
+            </div>
+            <div>
+              <label style="margin-top:0">Role</label>
+              <input name="member_role[]" placeholder="Developer">
+            </div>
+            <div>
+              <label>Email</label>
+              <input name="member_email[]" type="email" placeholder="aqsa@team.dev">
+            </div>
+            <div>
+              <label>Hours Worked</label>
+              <input name="member_hours[]" type="number" value="10" min="0" step="0.5">
+            </div>
+          </div>
+        </div>
+      </div>
+      <button type="button" class="btn-submit" style="background:#334155;color:#e2e8f0;margin-top:8px" onclick="addMember()">+ Add team member</button>
+
       <!-- Actions -->
       <div class="actions-row">
         <label>
@@ -189,6 +235,53 @@
     </form>
   </div>
 </div>
+
+<script>
+function addItem() {
+  const c = document.getElementById('items-container');
+  c.insertAdjacentHTML('beforeend', `
+    <div class="row-group" style="border:1px solid #334155;border-radius:10px;padding:12px;background:#0f172a;margin-bottom:10px">
+      <label style="margin-top:0">Description</label>
+      <input name="item_desc[]" required placeholder="Service description">
+      <div class="grid2">
+        <div>
+          <label>Quantity</label>
+          <input name="item_qty[]" type="number" value="1" min="0.01" step="0.01">
+        </div>
+        <div>
+          <label>Unit Price (USD)</label>
+          <input name="item_price[]" type="number" value="0" min="0" step="0.01">
+        </div>
+      </div>
+    </div>
+  `);
+}
+function addMember() {
+  const c = document.getElementById('team-container');
+  c.insertAdjacentHTML('beforeend', `
+    <div class="row-group" style="border:1px solid #334155;border-radius:10px;padding:12px;background:#0f172a;margin-bottom:10px">
+      <div class="grid2">
+        <div>
+          <label style="margin-top:0">Name</label>
+          <input name="member_name[]" required placeholder="Name">
+        </div>
+        <div>
+          <label style="margin-top:0">Role</label>
+          <input name="member_role[]" placeholder="Role">
+        </div>
+        <div>
+          <label>Email</label>
+          <input name="member_email[]" type="email" placeholder="email@team.dev">
+        </div>
+        <div>
+          <label>Hours Worked</label>
+          <input name="member_hours[]" type="number" value="0" min="0" step="0.5">
+        </div>
+      </div>
+    </div>
+  `);
+}
+</script>
 
 <!-- ── What happens next ── -->
 <div class="pipeline-preview">

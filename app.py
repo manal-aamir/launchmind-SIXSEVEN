@@ -206,9 +206,28 @@ def build():
     do_slack  = "post_slack"  in f
     do_agents = "run_agents"  in f
 
-    # Create a minimal invoice record (1 line item = the build request itself)
-    items = [LineItem(description=development_request[:120], quantity=1, unit_price=0)]
-    team  = [TeamMember(name=client_name, email=client_email, hours_worked=1, role="Client")]
+    # Parse invoice items (fallback to 1 item = build request)
+    descs  = f.getlist("item_desc[]")
+    qtys   = f.getlist("item_qty[]")
+    prices = f.getlist("item_price[]")
+    items = [
+        LineItem(description=d, quantity=float(q or 1), unit_price=float(p or 0))
+        for d, q, p in zip(descs, qtys, prices)
+        if str(d or "").strip()
+    ] or [LineItem(description=development_request[:120], quantity=1, unit_price=0)]
+
+    # Parse team members + hours (fallback to 1 placeholder member)
+    names  = f.getlist("member_name[]")
+    roles  = f.getlist("member_role[]")
+    emails = f.getlist("member_email[]")
+    hours  = f.getlist("member_hours[]")
+    team = [
+        TeamMember(name=n, email=e, hours_worked=float(h or 0), role=r or "Team Member")
+        for n, r, e, h in zip(names, roles, emails, hours)
+        if str(n or "").strip()
+    ]
+    if not team:
+        team = [TeamMember(name="Team Member", email="", hours_worked=1, role="Team Member")]
     inv   = invoice_engine.create_invoice(
         project_name=project_name,
         client_name=client_name,
@@ -245,7 +264,7 @@ def build():
         )
         subject  = email_copy.get("subject", f"Invoice {invoice_id}")
         body     = email_copy.get("body", "")
-        html_inv = invoice_engine.generate_html(inv)
+        html_inv = invoice_engine.generate_html(inv, include_internal_split=False)
         html_body = f"<p>{body.replace(chr(10), '<br>')}</p><hr>" + html_inv
         client_sg = SendGridClient(
             api_key=env.get("SENDGRID_API_KEY", ""),
@@ -414,7 +433,7 @@ def submit():
         )
         subject  = email_copy.get("subject", f"Invoice {inv.invoice_id}")
         body     = email_copy.get("body", "")
-        html_inv = invoice_engine.generate_html(inv)
+        html_inv = invoice_engine.generate_html(inv, include_internal_split=False)
         html_body = f"<p>{body.replace(chr(10), '<br>')}</p><hr>" + html_inv
         client_sg = SendGridClient(
             api_key=env.get("SENDGRID_API_KEY", ""),
@@ -548,7 +567,7 @@ def download_invoice(invoice_id):
         # Compute splits so the confidential section shows in the HTML
         if not inv.payment_splits and inv.team_members:
             inv.calculate_splits()
-        html = invoice_engine.generate_html(inv)
+        html = invoice_engine.generate_html(inv, include_internal_split=True)
         return Response(
             html,
             mimetype="text/html",
