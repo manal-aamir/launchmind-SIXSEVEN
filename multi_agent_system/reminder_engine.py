@@ -46,19 +46,19 @@ class ReminderEngine:
     def _slack_blocks_day1(self, inv: InvoiceRecord) -> list:
         return [
             {"type": "header",
-             "text": {"type": "plain_text", "text": f"Payment reminder: {inv.project_name}"}},
+             "text": {"type": "plain_text", "text": f"Invoice due today: {inv.project_name}"}},
             {"type": "section",
              "text": {"type": "mrkdwn",
                       "text": (
-                          f"Hi team — friendly heads up that invoice *{inv.invoice_id}* "
-                          f"sent to *{inv.client_name}* is now due.\n\n"
-                          f"*Amount:* {inv.currency} {inv.total_amount:,.2f}\n"
+                          f"Invoice *{inv.invoice_id}* for *{inv.client_name}* is due today.\n\n"
+                          f"*Total bill:* {inv.currency} {inv.total_amount:,.2f}\n"
                           f"*Due date:* {inv.due_date}\n\n"
-                          "Client has been notified. We'll follow up automatically."
+                          "This is an FYI with the total due (not a harsh reminder). "
+                          "InvoiceHound will handle follow-ups automatically if unpaid."
                       )}},
             {"type": "context",
              "elements": [{"type": "mrkdwn",
-                           "text": "InvoiceHound • Day 1 reminder • Polite tone"}]},
+                           "text": "InvoiceHound • Day 1 • Total due notice (polite)"}]},
         ]
 
     def _slack_blocks_day7(self, inv: InvoiceRecord) -> list:

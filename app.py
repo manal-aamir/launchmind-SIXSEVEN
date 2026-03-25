@@ -304,10 +304,36 @@ def submit():
                 )
                 result = ceo.run(startup_idea=idea, dry_run=not execute_actions)
                 state["agent_done"]["ceo"] = True
-                state["pr_url"]   = result["agent_outputs"].get("engineer", {}).get("pr_url", "")
-                state["issue_url"]= result["agent_outputs"].get("engineer", {}).get("issue_url", "")
-                state["qa_passed"]= result.get("qa", {}).get("passed")
-                state["done"]     = True
+
+                eng = result.get("agent_outputs", {}).get("engineer", {}) or {}
+                mkt = result.get("agent_outputs", {}).get("marketing", {}) or {}
+                qa  = result.get("qa", {}) or {}
+
+                # Mark all agents done (QA runs inside ceo.run, not via _run_with_review)
+                state["agent_done"]["product"] = True
+                state["agent_done"]["engineer"] = True
+                state["agent_done"]["marketing"] = True
+                state["agent_done"]["qa"] = True
+
+                state["pr_url"]    = eng.get("pr_url", "")
+                state["issue_url"] = eng.get("issue_url", "")
+
+                state["email_sent"] = bool(mkt.get("email_receipt", {}).get("ok"))
+                state["slack_ok"]   = bool(mkt.get("slack_receipt", {}).get("ok"))
+
+                state["qa_passed"] = qa.get("passed")
+                state["slack_summary_ok"] = bool(result.get("slack_response", {}).get("ok"))
+
+                comments_raw = (
+                    qa.get("report", {})
+                      .get("review_receipt", {})
+                      .get("comments", [])
+                )
+                state["qa_comments"] = [
+                    c.get("body", "") for c in comments_raw if isinstance(c, dict)
+                ][:2]
+
+                state["done"] = True
                 rec = _load(inv_id)
                 rec["pr_url"]    = state["pr_url"]
                 rec["issue_url"] = state["issue_url"]
