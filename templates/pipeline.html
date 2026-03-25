@@ -77,6 +77,11 @@
     &nbsp;·&nbsp; Client: <strong style="color:#f1f5f9">{{ pipeline.client_name }}</strong>
     &nbsp;·&nbsp; Invoice: <code style="color:#94a3b8">{{ pipeline.invoice_id }}</code>
   </p>
+  {% if pipeline.get('project_description') %}
+  <p style="margin-top:-28px;margin-bottom:20px;color:#94a3b8;font-size:13px">
+    Description: {{ pipeline.project_description }}
+  </p>
+  {% endif %}
 
   <!-- ── Agent steps ── -->
   <div class="card">
@@ -112,6 +117,22 @@
 
     </div>
   </div>
+
+  {% if pipeline.get('task_messages') %}
+  <div class="card">
+    <h3>Agent Inputs (From CEO)</h3>
+    {% for name, msg in pipeline.task_messages.items() %}
+      <details style="margin-bottom:10px">
+        <summary style="cursor:pointer;color:#cbd5e1;font-size:13px">{{ name|upper }} task brief</summary>
+        <div style="margin-top:8px;font-size:12px;color:#94a3b8;line-height:1.6">
+          <div><strong style="color:#e2e8f0">Brief:</strong> {{ msg.task_brief }}</div>
+          <div><strong style="color:#e2e8f0">Expected:</strong> {{ msg.expected_output }}</div>
+          <div><strong style="color:#e2e8f0">Constraints:</strong> {{ msg.constraints }}</div>
+        </div>
+      </details>
+    {% endfor %}
+  </div>
+  {% endif %}
 
   <!-- ── Results ── -->
   <div class="card">
@@ -194,6 +215,52 @@
       </div>
     {% endif %}
   </div>
+
+  {% if pipeline.get('marketing_copy') %}
+  <div class="card">
+    <h3>Marketing Output (LLM Generated)</h3>
+    <div style="font-size:13px;color:#94a3b8;line-height:1.7">
+      <div><strong style="color:#e2e8f0">Tagline:</strong> {{ pipeline.marketing_copy.tagline }}</div>
+      <div><strong style="color:#e2e8f0">Landing Description:</strong> {{ pipeline.marketing_copy.landing_description }}</div>
+      <div><strong style="color:#e2e8f0">Cold Email Subject:</strong> {{ pipeline.marketing_copy.cold_email.subject }}</div>
+      <div><strong style="color:#e2e8f0">Cold Email Body:</strong> {{ pipeline.marketing_copy.cold_email.body }}</div>
+      <div><strong style="color:#e2e8f0">Test Email Recipient:</strong> {{ pipeline.get('marketing_recipient', 'N/A') }}</div>
+      <div style="margin-top:8px"><strong style="color:#e2e8f0">Social Posts:</strong></div>
+      <ul style="margin-left:18px">
+        <li>Twitter/X: {{ pipeline.marketing_copy.social_posts.twitter }}</li>
+        <li>LinkedIn: {{ pipeline.marketing_copy.social_posts.linkedin }}</li>
+        <li>Instagram: {{ pipeline.marketing_copy.social_posts.instagram }}</li>
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if pipeline.get('landing_html') %}
+  <div class="card">
+    <h3>Generated Landing Page HTML (Engineer Output)</h3>
+    <details>
+      <summary style="cursor:pointer;color:#cbd5e1;font-size:13px">Show HTML</summary>
+      <pre style="margin-top:8px;max-height:260px;overflow:auto;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px;color:#94a3b8;font-size:11px">{{ pipeline.landing_html }}</pre>
+    </details>
+  </div>
+  {% endif %}
+
+  {% if pipeline.get('qa_report') %}
+  <div class="card">
+    <h3>QA LLM Review Summary</h3>
+    <div style="font-size:13px;color:#94a3b8;line-height:1.7">
+      <div><strong style="color:#e2e8f0">HTML verdict:</strong> {{ pipeline.qa_report.html_review.verdict if pipeline.qa_report.html_review else 'N/A' }}</div>
+      <div><strong style="color:#e2e8f0">Copy verdict:</strong> {{ pipeline.qa_report.copy_review.verdict if pipeline.qa_report.copy_review else 'N/A' }}</div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if pipeline.get('ceo_summary_text') %}
+  <div class="card">
+    <h3>CEO Final Summary</h3>
+    <pre style="white-space:pre-wrap;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px;color:#94a3b8;font-size:12px">{{ pipeline.ceo_summary_text }}</pre>
+  </div>
+  {% endif %}
 
   <!-- ── Actions ── -->
   <div class="actions">

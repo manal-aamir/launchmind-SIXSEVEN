@@ -202,6 +202,16 @@ def pipeline_status(invoice_id):
         if rec.get("agent_error"):
             state["agent_error"] = rec["agent_error"]
             state["done"] = True
+        if rec.get("marketing_copy"):
+            state["marketing_copy"] = rec["marketing_copy"]
+        if rec.get("marketing_recipient"):
+            state["marketing_recipient"] = rec["marketing_recipient"]
+        if rec.get("ceo_summary_text"):
+            state["ceo_summary_text"] = rec["ceo_summary_text"]
+        if rec.get("landing_html"):
+            state["landing_html"] = rec["landing_html"]
+        if rec.get("qa_report"):
+            state["qa_report"] = rec["qa_report"]
     except Exception:
         pass
     state["invoice_id"] = invoice_id
@@ -293,6 +303,7 @@ def submit():
             "invoice_id":   invoice_id,
             "project_name": inv.project_name,
             "client_name":  inv.client_name,
+            "project_description": development_request,
             "done":         False,
             "agent_done":   {},
             "agent_active": None,
@@ -301,6 +312,8 @@ def submit():
         def _run_agents(inv_id: str):
             state = _pipeline_states[inv_id]
             try:
+                print(f"[Pipeline:{inv_id}] START")
+                print(f"[Pipeline:{inv_id}] Build request: {development_request}")
                 ceo = CEOAgent(
                     groq_client=groq_client,
                     redis_bus=redis_bus,
@@ -317,9 +330,14 @@ def submit():
 
                 def _tracked_rwr(task):
                     state["agent_active"] = task.target_agent
+                    print(
+                        f"[Pipeline:{inv_id}] {task.target_agent.upper()} input -> "
+                        f"brief={task.task_brief!r}"
+                    )
                     result = original_rwr(task)
                     state["agent_done"][task.target_agent] = True
                     state["agent_active"] = None
+                    print(f"[Pipeline:{inv_id}] {task.target_agent.upper()} done")
                     return result
 
                 ceo._run_with_review = _tracked_rwr
@@ -331,6 +349,7 @@ def submit():
                 )
                 result = ceo.run(startup_idea=idea, dry_run=not execute_actions)
                 state["agent_done"]["ceo"] = True
+                state["task_messages"] = result.get("task_messages", {})
 
                 eng = result.get("agent_outputs", {}).get("engineer", {}) or {}
                 mkt = result.get("agent_outputs", {}).get("marketing", {}) or {}
@@ -351,6 +370,16 @@ def submit():
 
                 state["qa_passed"] = qa.get("passed")
                 state["slack_summary_ok"] = bool(result.get("slack_response", {}).get("ok"))
+                state["ceo_summary_text"] = result.get("final_summary_text", "")
+                state["marketing_copy"] = {
+                    "tagline": mkt.get("tagline", ""),
+                    "landing_description": mkt.get("landing_description", ""),
+                    "cold_email": mkt.get("cold_email", {}),
+                    "social_posts": mkt.get("social_posts", {}),
+                }
+                state["marketing_recipient"] = env.get("SENDGRID_TO_EMAIL", "")
+                state["landing_html"] = eng.get("html", "")
+                state["qa_report"] = result.get("qa_report", {})
 
                 comments_raw = (
                     qa.get("report", {})
@@ -370,10 +399,22 @@ def submit():
                 rec["team_assignments"] = _build_team_assignments(
                     rec.get("team_members", []), product
                 )
+                rec["marketing_copy"] = state["marketing_copy"]
+                rec["marketing_recipient"] = state["marketing_recipient"]
+                rec["ceo_summary_text"] = state["ceo_summary_text"]
+                rec["landing_html"] = state["landing_html"]
+                rec["qa_report"] = state["qa_report"]
                 _save(rec)
+                print(f"[Pipeline:{inv_id}] ISSUE: {state['issue_url']}")
+                print(f"[Pipeline:{inv_id}] PR: {state['pr_url']}")
+                print(f"[Pipeline:{inv_id}] Marketing email_sent={state['email_sent']} slack_ok={state['slack_ok']}")
+                print(f"[Pipeline:{inv_id}] QA passed={state['qa_passed']}")
+                print(f"[Pipeline:{inv_id}] CEO summary posted={state['slack_summary_ok']}")
+                print(f"[Pipeline:{inv_id}] COMPLETE")
             except Exception as exc:
                 state["agent_error"] = str(exc)
                 state["done"] = True
+                print(f"[Pipeline:{inv_id}] ERROR: {exc}")
 
         threading.Thread(target=_run_agents, args=(invoice_id,), daemon=True).start()
         flash(f"Invoice {inv.invoice_id} created — pipeline running.", "success")
