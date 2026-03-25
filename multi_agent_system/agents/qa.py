@@ -71,17 +71,24 @@ class QAAgent:
             for issue in issues:
                 raw_comments.append(self.groq.generate_pr_comment(issue))
 
-            inline = [
-                {"path": "index.html", "line": 1, "side": "RIGHT",
-                 "body": raw_comments[0], "commit_id": head_sha},
-                {"path": "index.html", "line": 2, "side": "RIGHT",
-                 "body": raw_comments[1], "commit_id": head_sha},
-            ]
-            review_receipt = self.github_client.create_inline_review_comments(
+            # Post at least two inline PR comments on index.html (assignment requirement).
+            c1 = self.github_client.create_review_comment(
                 pr_number=int(pr_number),
-                comments=inline,
-                body="QA Agent (Groq llama-3.3-70b) review for InvoiceHound",
+                commit_id=head_sha,
+                path="index.html",
+                line=1,
+                side="RIGHT",
+                body=raw_comments[0],
             )
+            c2 = self.github_client.create_review_comment(
+                pr_number=int(pr_number),
+                commit_id=head_sha,
+                path="index.html",
+                line=2,
+                side="RIGHT",
+                body=raw_comments[1],
+            )
+            review_receipt = {"ok": True, "comments": [c1, c2]}
 
         notes = "QA passed — HTML and copy approved." if passed else "QA failed — issues found."
         report = {

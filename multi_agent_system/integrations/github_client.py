@@ -114,3 +114,27 @@ class GitHubClient:
             {"body": body, "event": "COMMENT", "comments": comments},
         )
 
+    def create_review_comment(
+        self,
+        pr_number: int,
+        commit_id: str,
+        path: str,
+        line: int,
+        side: str,
+        body: str,
+    ) -> Dict[str, Any]:
+        """
+        Create a single inline PR review comment.
+
+        Uses the dedicated REST endpoint:
+          POST /repos/{owner}/{repo}/pulls/{pull_number}/comments
+        """
+        payload = {
+            "body": body,
+            "commit_id": commit_id,
+            "path": path,
+            "line": int(line),
+            "side": side,
+        }
+        return self._request("POST", f"/pulls/{pr_number}/comments", payload)
+
