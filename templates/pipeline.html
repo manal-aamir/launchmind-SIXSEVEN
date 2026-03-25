@@ -1,18 +1,8 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>InvoiceHound — Pipeline Running</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
-    nav { background: #1e293b; padding: 14px 32px; display: flex; align-items: center; gap: 28px;
-          border-bottom: 1px solid #334155; }
-    nav .brand { font-size: 20px; font-weight: 700; color: #22c55e; text-decoration: none; }
-    nav a { color: #94a3b8; text-decoration: none; font-size: 14px; }
-    nav a:hover { color: #e2e8f0; }
-    .container { max-width: 720px; margin: 0 auto; padding: 52px 20px; }
+{% extends "base.html" %}
+{% block title %}— Pipeline{% endblock %}
+{% block content %}
+<style>
+    .container { max-width: 720px; margin: 0 auto; padding: 12px 0 0; }
     h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
     .subtitle { color: #64748b; font-size: 15px; margin-bottom: 40px; }
     .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px;
@@ -72,15 +62,6 @@
       font-style: italic; border-left: 3px solid #3b82f6;
     }
   </style>
-</head>
-<body>
-
-<nav>
-  <a href="/" class="brand">🐕 InvoiceHound</a>
-  <a href="/invoice">New Invoice</a>
-  <a href="/dashboard">Dashboard</a>
-  <a href="/messages" style="color:#818cf8">Message History</a>
-</nav>
 
 <div class="container">
 
@@ -238,5 +219,4 @@
 </script>
 {% endif %}
 
-</body>
-</html>
+{% endblock %}

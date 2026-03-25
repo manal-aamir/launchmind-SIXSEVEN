@@ -1,19 +1,9 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>InvoiceHound — Submit Your Build Request</title>
-  <style>
+{% extends "base.html" %}
+{% block title %}— Home{% endblock %}
+{% block content %}
+<style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
-
-    /* ── Nav ── */
-    nav { background: #1e293b; padding: 14px 32px; display: flex; align-items: center; gap: 28px;
-          border-bottom: 1px solid #334155; }
-    nav .brand { font-size: 20px; font-weight: 700; color: #22c55e; text-decoration: none; }
-    nav a { color: #94a3b8; text-decoration: none; font-size: 14px; }
-    nav a:hover { color: #e2e8f0; }
+    /* base.html already sets body + navbar */
 
     /* ── Hero ── */
     .hero { text-align: center; padding: 72px 20px 40px; }
@@ -97,24 +87,7 @@
       .hero h1 { font-size: 32px; }
       .grid2 { grid-template-columns: 1fr; }
     }
-  </style>
-</head>
-<body>
-
-<nav>
-  <a href="/" class="brand">🐕 InvoiceHound</a>
-  <a href="/invoice">New Invoice</a>
-  <a href="/dashboard">Dashboard</a>
-  <a href="/messages" style="color:#818cf8">Message History</a>
-</nav>
-
-<div style="max-width:880px;margin:0 auto;padding:0 20px">
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for cat, msg in messages %}
-      <div class="flash flash-{{ 'ok' if cat == 'success' else 'err' }}" style="margin-top:18px">{{ msg }}</div>
-    {% endfor %}
-  {% endwith %}
-</div>
+</style>
 
 <!-- ── Hero ── -->
 <div class="hero">
@@ -332,5 +305,4 @@ function addMember() {
   </div>
 </div>
 
-</body>
-</html>
+{% endblock %}
