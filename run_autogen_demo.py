@@ -5,6 +5,9 @@ Uses Microsoft AutoGen (pyautogen) to orchestrate the 5 agents via
 ConversableAgent.  Each agent registers its real side-effect tools
 (GitHub, Slack, SendGrid) so AutoGen executes them autonomously.
 
+All LLM calls go through Groq (llama-3.3-70b-versatile) via its
+OpenAI-compatible endpoint.
+
 Run:
     python3 run_autogen_demo.py
 """
@@ -31,7 +34,6 @@ from multi_agent_system.groq_client import GroqClient
 from multi_agent_system.integrations.github_client import GitHubClient
 from multi_agent_system.integrations.sendgrid_client import SendGridClient
 from multi_agent_system.integrations.slack_client import SlackClient
-from multi_agent_system.llm_client import LLMClient
 from multi_agent_system.models import MessageBus
 
 
@@ -44,8 +46,6 @@ OUT_DIR    = Path(__file__).parent
 LOGS_DIR   = OUT_DIR / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
 
-OPENAI_KEY   = os.environ.get("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 GROQ_KEY     = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL   = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
@@ -57,7 +57,6 @@ SLACK_TOKEN  = os.environ.get("SLACK_BOT_TOKEN", "")
 SLACK_CH     = os.environ.get("LAUNCHES_CHANNEL_ID", "")
 
 # ── client singletons ──────────────────────────────────────────────────────
-llm_client      = LLMClient(api_key=OPENAI_KEY, model=OPENAI_MODEL)
 groq_client     = GroqClient(api_key=GROQ_KEY, model=GROQ_MODEL)
 github_client   = GitHubClient(token=GITHUB_TOKEN, repo=GITHUB_REPO)
 sendgrid_client = SendGridClient(api_key=SG_KEY, from_email=SG_FROM)
@@ -65,19 +64,21 @@ slack_client    = SlackClient(bot_token=SLACK_TOKEN)
 
 bus = MessageBus()   # global message log for this run
 
-# ── AutoGen LLM config ─────────────────────────────────────────────────────
-# If no key, use a mock / "human" mode so demo still runs
-def _oai_cfg(model: str = OPENAI_MODEL) -> list:
-    if OPENAI_KEY:
-        return [{"model": model, "api_key": OPENAI_KEY}]
-    return [{"model": "gpt-4o-mini", "api_key": "sk-dummy"}]
+# ── AutoGen LLM config (Groq via OpenAI-compatible API) ───────────────────
+def _groq_cfg() -> list:
+    if GROQ_KEY:
+        return [{
+            "model": GROQ_MODEL,
+            "api_key": GROQ_KEY,
+            "base_url": "https://api.groq.com/openai/v1",
+        }]
+    return [{"model": GROQ_MODEL, "api_key": "sk-dummy"}]
 
 # ── Tool functions registered to agents ────────────────────────────────────
 
 def tool_generate_product_spec(idea: str) -> str:
-    """Product agent tool: generate full product spec via LLM."""
-    spec = llm_client.generate_product_spec(idea) if hasattr(llm_client, "generate_product_spec") \
-        else {"value_proposition": idea, "features": [], "user_stories": []}
+    """Product agent tool: generate full product spec via Groq LLM."""
+    spec = groq_client.generate_product_spec(startup_idea=idea)
     bus.send("product", "ceo", "result", {"spec": spec})
     return json.dumps(spec, indent=2)
 
@@ -118,10 +119,10 @@ def tool_send_marketing(tagline: str, description: str, pr_url: str) -> str:
     """Marketing agent tool: send cold email + post Slack Block Kit launch."""
     results: dict = {}
     if not DRY_RUN and SG_KEY:
-        results["email"] = sendgrid_client.send(
-            to_email=SG_TO,
+        results["email"] = sendgrid_client.send_email(
             subject=f"Introducing InvoiceHound — {tagline}",
-            html_content=f"<h2>{tagline}</h2><p>{description}</p><p>PR: <a href='{pr_url}'>{pr_url}</a></p>",
+            html_text=f"<h2>{tagline}</h2><p>{description}</p><p>PR: <a href='{pr_url}'>{pr_url}</a></p>",
+            plain_text=f"{tagline}\n\n{description}\n\nPR: {pr_url}",
         )
     if not DRY_RUN and SLACK_TOKEN and SLACK_CH:
         blocks = [
@@ -132,7 +133,7 @@ def tool_send_marketing(tagline: str, description: str, pr_url: str) -> str:
                 {"type": "mrkdwn", "text": "*Status:* Ready for review"},
             ]},
         ]
-        results["slack"] = slack_client.post_block_message(SLACK_CH, blocks)
+        results["slack"] = slack_client.post_block_message(SLACK_CH, text="launch", blocks=blocks)
     bus.send("marketing", "ceo", "result", results)
     return json.dumps(results or {"dry_run": True})
 
@@ -140,12 +141,12 @@ def tool_send_marketing(tagline: str, description: str, pr_url: str) -> str:
 def tool_qa_review(html: str, copy: str) -> str:
     """QA agent tool: use Groq to review HTML and copy, return pass/fail."""
     try:
-        html_review = groq_client.review_html(html, {})
-        copy_review = groq_client.review_copy(copy, {})
-        passed = html_review.get("pass", False) and copy_review.get("pass", False)
+        html_review = groq_client.review_html({}, html)
+        copy_review = groq_client.review_copy({"copy": copy})
+        passed = html_review.get("verdict", "fail") == "pass" and copy_review.get("verdict", "fail") == "pass"
         report = {"html": html_review, "copy": copy_review, "overall_pass": passed}
     except Exception as exc:
-        passed = True   # graceful degradation
+        passed = True
         report = {"error": str(exc), "overall_pass": True}
     bus.send("qa", "ceo", "result", report)
     return json.dumps(report, indent=2)
@@ -153,7 +154,7 @@ def tool_qa_review(html: str, copy: str) -> str:
 
 # ── AutoGen agents ─────────────────────────────────────────────────────────
 
-llm_config = {"config_list": _oai_cfg(), "timeout": 120}
+llm_config = {"config_list": _groq_cfg(), "timeout": 120}
 
 ceo_agent = autogen.AssistantAgent(
     name="CEO",
@@ -260,6 +261,7 @@ def run_autogen(idea: str = IDEA) -> None:
     print("=" * 60)
     print(f"  Idea  : {idea[:80]}")
     print(f"  Mode  : {'LIVE' if not DRY_RUN else 'DRY RUN'}")
+    print(f"  LLM   : Groq {GROQ_MODEL}")
     print("=" * 60 + "\n")
 
     # Seed the conversation with CEO's opening task message

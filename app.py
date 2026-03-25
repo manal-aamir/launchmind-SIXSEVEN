@@ -21,14 +21,17 @@ from pathlib import Path
 
 from flask import Flask, flash, redirect, render_template, request, url_for, Response
 
+# In-memory pipeline state dict: { invoice_id: { ...status fields... } }
+_pipeline_states: dict = {}
+
 from multi_agent_system.agents.ceo import CEOAgent
 from multi_agent_system.env_utils import load_dotenv_file
+from multi_agent_system.deepseek_client import DeepSeekClient
 from multi_agent_system.groq_client import GroqClient
 from multi_agent_system.integrations.github_client import GitHubClient
 from multi_agent_system.integrations.sendgrid_client import SendGridClient
 from multi_agent_system.integrations.slack_client import SlackClient
 from multi_agent_system.invoice_engine import InvoiceEngine, LineItem, TeamMember
-from multi_agent_system.llm_client import LLMClient
 from multi_agent_system.redis_bus import RedisBus
 from multi_agent_system.reminder_engine import ReminderEngine
 
@@ -54,19 +57,19 @@ sendgrid_client = SendGridClient(
     from_email=env.get("SENDGRID_FROM_EMAIL", ""),
     to_email=env.get("SENDGRID_TO_EMAIL", ""),
 )
+deepseek_client = DeepSeekClient(
+    api_key=env.get("DEEPSEEK_API_KEY", ""),
+    model=env.get("DEEPSEEK_MODEL", "deepseek-chat"),
+)
 groq_client = GroqClient(
     api_key=env.get("GROQ_API_KEY", ""),
     model=env.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
+    fallback=deepseek_client,
 )
 github_client = GitHubClient(
     token=env.get("GITHUB_TOKEN", ""),
     repo=env.get("GITHUB_REPO", "manal-aamir/launchmind-SIXSEVEN"),
 )
-llm_client = LLMClient(
-    api_key=env.get("OPENAI_API_KEY", ""),
-    model=env.get("OPENAI_MODEL", "gpt-4o-mini"),
-)
-
 redis_bus = RedisBus(
     host=env.get("REDIS_HOST", "localhost"),
     port=int(env.get("REDIS_PORT", "6379")),
@@ -141,6 +144,13 @@ def _invoice_to_record(inv):
 
 @app.route("/")
 def index():
+    """Hero landing page — client submits a build request."""
+    return render_template("index.html")
+
+
+@app.route("/invoice")
+def new_invoice_page():
+    """Full invoice form (detailed)."""
     return render_template("new_invoice.html")
 
 
@@ -149,12 +159,209 @@ def dashboard():
     return render_template("dashboard.html", invoices=_all_invoices())
 
 
+@app.route("/pipeline/<invoice_id>")
+def pipeline_status(invoice_id):
+    """Live pipeline status page — auto-refreshes every 5 s until done."""
+    state = _pipeline_states.get(invoice_id, {})
+    # Merge persisted record fields (pr_url, issue_url, etc.)
+    try:
+        rec = _load(invoice_id)
+        state.setdefault("project_name", rec.get("project_name", ""))
+        state.setdefault("client_name",  rec.get("client_name", ""))
+        state["invoice_id"] = invoice_id
+        if rec.get("pr_url"):
+            state["pr_url"] = rec["pr_url"]
+        if rec.get("issue_url"):
+            state["issue_url"] = rec["issue_url"]
+        if rec.get("agent_error"):
+            state["agent_error"] = rec["agent_error"]
+            state["done"] = True
+    except Exception:
+        pass
+    state["invoice_id"] = invoice_id
+    return render_template("pipeline.html", pipeline=state)
+
+
+# ── Build request entry point (from hero page) ──────────────────────────────
+
+@app.route("/build", methods=["POST"])
+def build():
+    """
+    Simplified entry: client submits a build request.
+    Creates a minimal invoice record, fires the 5-agent pipeline,
+    and redirects to the live pipeline status page.
+    """
+    f = request.form
+    development_request = f.get("development_request", "").strip()
+    project_name        = f.get("project_name", "InvoiceHound Build").strip()
+    client_name         = f.get("client_name", "Client").strip()
+    client_email        = f.get("client_email", "").strip()
+    days_due            = int(f.get("days_due", 14))
+
+    if not development_request:
+        flash("Please describe what you want built.", "error")
+        return redirect(url_for("index"))
+
+    do_email  = "send_email"  in f
+    do_slack  = "post_slack"  in f
+    do_agents = "run_agents"  in f
+
+    # Create a minimal invoice record (1 line item = the build request itself)
+    items = [LineItem(description=development_request[:120], quantity=1, unit_price=0)]
+    team  = [TeamMember(name=client_name, email=client_email, hours_worked=1, role="Client")]
+    inv   = invoice_engine.create_invoice(
+        project_name=project_name,
+        client_name=client_name,
+        client_email=client_email,
+        team_members=team,
+        line_items=items,
+        days_until_due=days_due,
+    )
+    record = _invoice_to_record(inv)
+    _save(record)
+
+    invoice_id = inv.invoice_id
+
+    # Initialise pipeline state
+    _pipeline_states[invoice_id] = {
+        "invoice_id":   invoice_id,
+        "project_name": project_name,
+        "client_name":  client_name,
+        "done":         False,
+        "agent_done":   {},
+        "agent_active": None,
+    }
+
+    # ── 1. Invoice email ─────────────────────────────────────────────────
+    if do_email and client_email:
+        email_copy = groq_client.write_invoice_email(
+            project_name=project_name,
+            client_name=client_name,
+            total_amount=0,
+            currency="USD",
+            due_date=inv.due_date,
+            invoice_id=invoice_id,
+            line_items=record["line_items"],
+        )
+        subject  = email_copy.get("subject", f"Invoice {invoice_id}")
+        body     = email_copy.get("body", "")
+        html_inv = invoice_engine.generate_html(inv)
+        html_body = f"<p>{body.replace(chr(10), '<br>')}</p><hr>" + html_inv
+        client_sg = SendGridClient(
+            api_key=env.get("SENDGRID_API_KEY", ""),
+            from_email=env.get("SENDGRID_FROM_EMAIL", ""),
+            to_email=client_email,
+        )
+        receipt = client_sg.send_email(subject=subject, plain_text=body, html_text=html_body) \
+                  if execute_actions else {"ok": "dry-run"}
+        record["email_sent"] = True
+        record["email_receipt"] = receipt
+        _pipeline_states[invoice_id]["email_sent"] = True
+        _save(record)
+
+    # ── 2. Day 1 Slack reminder ──────────────────────────────────────────
+    if do_slack:
+        reminder_engine.check_and_send(inv, simulate_days_overdue=1)
+        record["slack_reminders"].append("Day 1")
+        _save(record)
+
+    # ── 3. 5-agent pipeline in background thread ─────────────────────────
+    if do_agents:
+        def _run_pipeline(inv_id: str, idea: str):
+            state = _pipeline_states[inv_id]
+            try:
+                ceo = CEOAgent(
+                    groq_client=groq_client,
+                    redis_bus=redis_bus,
+                    slack_client=slack_client,
+                    github_client=github_client,
+                    sendgrid_client=sendgrid_client,
+                    slack_channel_id=env.get("SLACK_CHANNEL_ID", ""),
+                    launches_channel_id=env.get("LAUNCHES_CHANNEL_ID", ""),
+                    output_dir=PROJECT_ROOT,
+                    dry_run_actions=not execute_actions,
+                    max_revisions=2,
+                )
+
+                # Hook into pipeline stages by monkey-patching _run_with_review
+                original_rwr = ceo._run_with_review
+
+                def _tracked_rwr(task):
+                    agent = task.target_agent
+                    state["agent_active"] = agent
+                    result = original_rwr(task)
+                    state["agent_done"][agent] = True
+                    state["agent_active"] = None
+                    return result
+
+                ceo._run_with_review = _tracked_rwr
+
+                state["agent_active"] = "ceo"
+                result = ceo.run(startup_idea=idea, dry_run=not execute_actions)
+                state["agent_done"]["ceo"] = True
+
+                # Extract results
+                eng = result["agent_outputs"].get("engineer", {})
+                mkt = result["agent_outputs"].get("marketing", {})
+                qa  = result.get("qa", {})
+
+                state["pr_url"]          = eng.get("pr_url", "")
+                state["issue_url"]       = eng.get("issue_url", "")
+                state["email_sent"]      = bool(mkt.get("email_receipt", {}).get("ok"))
+                state["slack_ok"]        = bool(mkt.get("slack_receipt", {}).get("ok"))
+                state["qa_passed"]       = qa.get("passed")
+                state["slack_summary_ok"]= bool(result.get("slack_response", {}).get("ok"))
+
+                # QA inline comments
+                comments_raw = (
+                    qa.get("report", {})
+                      .get("review_receipt", {})
+                      .get("comments", [])
+                )
+                state["qa_comments"] = [
+                    c.get("body", "") for c in comments_raw if isinstance(c, dict)
+                ][:2]
+
+                state["agent_active"] = None
+                state["done"]         = True
+
+                # Persist to record
+                rec = _load(inv_id)
+                rec["pr_url"]    = state["pr_url"]
+                rec["issue_url"] = state["issue_url"]
+                rec["agent_log"] = result.get("decision_log_path", "")
+                _save(rec)
+
+            except Exception as exc:
+                state["agent_error"] = str(exc)
+                state["done"]        = True
+                state["agent_active"] = None
+                try:
+                    rec = _load(inv_id)
+                    rec["agent_error"] = str(exc)
+                    _save(rec)
+                except Exception:
+                    pass
+
+        idea = (
+            f"InvoiceHound — Build request: {development_request}. "
+            f"Client: {client_name}. "
+            "Generate a professional landing page, create a GitHub issue/branch/commit/PR, "
+            "produce marketing copy + send email + post Slack Block Kit to #launches, "
+            "and run QA review with 2 inline PR comments."
+        )
+        threading.Thread(target=_run_pipeline, args=(invoice_id, idea), daemon=True).start()
+
+    return redirect(url_for("pipeline_status", invoice_id=invoice_id))
+
+
+# ── Legacy /submit route (from full invoice form) ────────────────────────────
+
 @app.route("/submit", methods=["POST"])
 def submit():
     f = request.form
     development_request = f.get("development_request", "").strip()
 
-    # Parse line items
     descs  = f.getlist("item_desc[]")
     qtys   = f.getlist("item_qty[]")
     prices = f.getlist("item_price[]")
@@ -165,9 +372,8 @@ def submit():
     ]
     if not items:
         flash("Add at least one invoice item.", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("new_invoice_page"))
 
-    # Parse team members
     names  = f.getlist("member_name[]")
     roles  = f.getlist("member_role[]")
     emails = f.getlist("member_email[]")
@@ -179,9 +385,8 @@ def submit():
     ]
     if not team:
         flash("Add at least one team member.", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("new_invoice_page"))
 
-    # Create invoice
     inv = invoice_engine.create_invoice(
         project_name=f["project_name"],
         client_name=f["client_name"],
@@ -197,7 +402,6 @@ def submit():
     do_slack  = "post_slack"  in f
     do_agents = "run_agents"  in f
 
-    # ── 1. LLM writes email (Groq — not hardcoded) ──────────────────────
     if do_email:
         email_copy = groq_client.write_invoice_email(
             project_name=inv.project_name,
@@ -208,12 +412,10 @@ def submit():
             invoice_id=inv.invoice_id,
             line_items=record["line_items"],
         )
-        subject = email_copy.get("subject", f"Invoice {inv.invoice_id}")
-        body    = email_copy.get("body", "")
-        html_invoice = invoice_engine.generate_html(inv)
-        html_body = f"<p>{body.replace(chr(10), '<br>')}</p><hr>" + html_invoice
-
-        # Override SendGrid recipient to client email
+        subject  = email_copy.get("subject", f"Invoice {inv.invoice_id}")
+        body     = email_copy.get("body", "")
+        html_inv = invoice_engine.generate_html(inv)
+        html_body = f"<p>{body.replace(chr(10), '<br>')}</p><hr>" + html_inv
         client_sg = SendGridClient(
             api_key=env.get("SENDGRID_API_KEY", ""),
             from_email=env.get("SENDGRID_FROM_EMAIL", ""),
@@ -221,24 +423,31 @@ def submit():
         )
         receipt = client_sg.send_email(subject=subject, plain_text=body, html_text=html_body) \
                   if execute_actions else {"ok": "dry-run"}
-
-        record["email_sent"] = True
+        record["email_sent"]    = True
         record["email_receipt"] = receipt
         _save(record)
 
-    # ── 2. Day 1 Slack reminder ──────────────────────────────────────────
     if do_slack:
         result = reminder_engine.check_and_send(inv, simulate_days_overdue=1)
         record["slack_reminders"].append("Day 1")
         record["reminder_receipts"] = {"day_1": result}
         _save(record)
 
-    # ── 3. CEO agent pipeline in background thread ───────────────────────
     if do_agents:
-        def _run_agents():
+        invoice_id = inv.invoice_id
+        _pipeline_states[invoice_id] = {
+            "invoice_id":   invoice_id,
+            "project_name": inv.project_name,
+            "client_name":  inv.client_name,
+            "done":         False,
+            "agent_done":   {},
+            "agent_active": None,
+        }
+
+        def _run_agents(inv_id: str):
+            state = _pipeline_states[inv_id]
             try:
                 ceo = CEOAgent(
-                    llm=llm_client,
                     groq_client=groq_client,
                     redis_bus=redis_bus,
                     slack_client=slack_client,
@@ -250,33 +459,42 @@ def submit():
                     dry_run_actions=not execute_actions,
                     max_revisions=2,
                 )
+                original_rwr = ceo._run_with_review
+
+                def _tracked_rwr(task):
+                    state["agent_active"] = task.target_agent
+                    result = original_rwr(task)
+                    state["agent_done"][task.target_agent] = True
+                    state["agent_active"] = None
+                    return result
+
+                ceo._run_with_review = _tracked_rwr
+                state["agent_active"] = "ceo"
                 base_request = development_request or inv.project_name
                 idea = (
                     f"InvoiceHound — Build request: {base_request}. "
-                    f"Generate one professional invoice for {inv.client_name}, "
-                    f"split {inv.total_amount:.0f} USD among {len(team)} team members "
-                    f"by hours, and auto-send escalating payment reminders."
+                    f"Client: {inv.client_name}."
                 )
                 result = ceo.run(startup_idea=idea, dry_run=not execute_actions)
-                rec = _load(inv.invoice_id)
-                rec["pr_url"]    = result["agent_outputs"].get("engineer", {}).get("pr_url", "")
-                rec["issue_url"] = result["agent_outputs"].get("engineer", {}).get("issue_url", "")
-                rec["agent_log"] = result["decision_log_path"]
+                state["agent_done"]["ceo"] = True
+                state["pr_url"]   = result["agent_outputs"].get("engineer", {}).get("pr_url", "")
+                state["issue_url"]= result["agent_outputs"].get("engineer", {}).get("issue_url", "")
+                state["qa_passed"]= result.get("qa", {}).get("passed")
+                state["done"]     = True
+                rec = _load(inv_id)
+                rec["pr_url"]    = state["pr_url"]
+                rec["issue_url"] = state["issue_url"]
+                rec["agent_log"] = result.get("decision_log_path", "")
                 _save(rec)
             except Exception as exc:
-                rec = _load(inv.invoice_id)
-                rec["agent_error"] = str(exc)
-                _save(rec)
+                state["agent_error"] = str(exc)
+                state["done"] = True
 
-        threading.Thread(target=_run_agents, daemon=True).start()
+        threading.Thread(target=_run_agents, args=(invoice_id,), daemon=True).start()
+        flash(f"Invoice {inv.invoice_id} created — pipeline running.", "success")
+        return redirect(url_for("pipeline_status", invoice_id=inv.invoice_id))
 
-    flash(
-        f"Invoice {inv.invoice_id} created for {inv.client_name} — "
-        f"{'email sent, ' if do_email else ''}"
-        f"{'Slack Day 1 reminder triggered, ' if do_slack else ''}"
-        f"{'agent pipeline running in background.' if do_agents else ''}",
-        "success",
-    )
+    flash(f"Invoice {inv.invoice_id} created for {inv.client_name}.", "success")
     return redirect(url_for("dashboard"))
 
 

@@ -9,7 +9,7 @@ input is needed. Just run:
 
 To enable real GitHub / SendGrid / Slack side-effects, set
   "execute_actions": true  in startup_config.json
-or add OPENAI_API_KEY to .env.
+and ensure GROQ_API_KEY is set in .env.
 """
 
 import json
@@ -17,11 +17,11 @@ from pathlib import Path
 
 from multi_agent_system.agents.ceo import CEOAgent
 from multi_agent_system.env_utils import load_dotenv_file
+from multi_agent_system.deepseek_client import DeepSeekClient
 from multi_agent_system.groq_client import GroqClient
 from multi_agent_system.integrations.github_client import GitHubClient
 from multi_agent_system.integrations.sendgrid_client import SendGridClient
 from multi_agent_system.integrations.slack_client import SlackClient
-from multi_agent_system.llm_client import LLMClient
 from multi_agent_system.redis_bus import RedisBus
 
 
@@ -56,13 +56,14 @@ def main() -> None:
     print("=" * 60)
     print()
 
-    llm = LLMClient(
-        api_key=env.get("OPENAI_API_KEY", ""),
-        model=env.get("OPENAI_MODEL", "gpt-4o-mini"),
+    deepseek_client = DeepSeekClient(
+        api_key=env.get("DEEPSEEK_API_KEY", ""),
+        model=env.get("DEEPSEEK_MODEL", "deepseek-chat"),
     )
     groq_client = GroqClient(
         api_key=env.get("GROQ_API_KEY", ""),
         model=env.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        fallback=deepseek_client,
     )
     github_client = GitHubClient(
         token=env.get("GITHUB_TOKEN", ""),
@@ -83,7 +84,6 @@ def main() -> None:
     print(f"Message bus  : {'Redis pub/sub' if redis_bus.is_redis else 'in-memory (Redis unavailable)'}")
 
     ceo = CEOAgent(
-        llm=llm,
         groq_client=groq_client,
         redis_bus=redis_bus,
         slack_client=slack_client,

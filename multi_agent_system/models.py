@@ -24,6 +24,7 @@ def _now_iso() -> str:
 
 
 def make_message(
+    
     from_agent: str,
     to_agent: str,
     message_type: str,           # 'task' | 'result' | 'revision_request' | 'confirmation'

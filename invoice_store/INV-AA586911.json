@@ -1,0 +1,114 @@
+{
+  "invoice_id": "INV-AA586911",
+  "project_name": "Website Geo",
+  "client_name": "John",
+  "client_email": "i221940@nu.edu.pk",
+  "issue_date": "2026-03-25",
+  "due_date": "2026-04-08",
+  "total_amount": 800.0,
+  "currency": "USD",
+  "paid": false,
+  "payment_splits": {
+    "AIsha": {
+      "email": "manal.aamir.2003@gmail.com",
+      "role": "UI/UX Designer",
+      "hours": 90.0,
+      "percentage": 40.9,
+      "amount": 327.27
+    },
+    "Bilal": {
+      "email": "manal.aamir.2003@gmail.com",
+      "role": "Developer",
+      "hours": 130.0,
+      "percentage": 59.1,
+      "amount": 472.73
+    }
+  },
+  "line_items": [
+    {
+      "description": "Services",
+      "quantity": 1.0,
+      "unit_price": 800.0,
+      "total": 800.0
+    }
+  ],
+  "email_sent": true,
+  "slack_reminders": [
+    "Day 1"
+  ],
+  "pr_url": "",
+  "agent_log": "",
+  "email_receipt": {
+    "ok": "True",
+    "status_code": "202",
+    "error": ""
+  },
+  "reminder_receipts": {
+    "day_1": {
+      "days_overdue": 1,
+      "action_taken": "day_1_slack",
+      "receipts": {
+        "slack": {
+          "ok": true,
+          "channel": "D0ANVC0JSNQ",
+          "ts": "1774445869.862109",
+          "message": {
+            "user": "U0ANKAYT6RH",
+            "type": "message",
+            "ts": "1774445869.862109",
+            "bot_id": "B0ANVA60TBN",
+            "app_id": "A0ANK609AGK",
+            "text": "Payment reminder (Day 1): INV-AA586911",
+            "team": "T71NF2AUX",
+            "bot_profile": {
+              "id": "B0ANVA60TBN",
+              "app_id": "A0ANK609AGK",
+              "user_id": "U0ANKAYT6RH",
+              "name": "LaunchMind Bot",
+              "icons": {
+                "image_36": "https://a.slack-edge.com/80588/img/plugins/app/bot_36.png",
+                "image_48": "https://a.slack-edge.com/80588/img/plugins/app/bot_48.png",
+                "image_72": "https://a.slack-edge.com/80588/img/plugins/app/service_72.png"
+              },
+              "deleted": false,
+              "updated": 1774436590,
+              "team_id": "T71NF2AUX"
+            },
+            "blocks": [
+              {
+                "type": "header",
+                "block_id": "mFmgj",
+                "text": {
+                  "type": "plain_text",
+                  "text": "Payment reminder: Website Geo",
+                  "emoji": true
+                }
+              },
+              {
+                "type": "section",
+                "block_id": "+K69y",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Hi team \u2014 friendly heads up that invoice *INV-AA586911* sent to *John* is now due.\n\n*Amount:* USD 800.00\n*Due date:* 2026-04-08\n\nClient has been notified. We'll follow up automatically.",
+                  "verbatim": false
+                }
+              },
+              {
+                "type": "context",
+                "block_id": "8c9GB",
+                "elements": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "InvoiceHound \u2022 Day 1 reminder \u2022 Polite tone",
+                    "verbatim": false
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "agent_error": "HTTP Error 422: Unprocessable Entity"
+}

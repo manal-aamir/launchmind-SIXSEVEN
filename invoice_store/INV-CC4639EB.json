@@ -1,0 +1,58 @@
+{
+  "invoice_id": "INV-CC4639EB",
+  "project_name": "Website Geo",
+  "client_name": "John",
+  "client_email": "i221940@nu.edu.pk",
+  "issue_date": "2026-03-25",
+  "due_date": "2026-04-08",
+  "total_amount": 300.0,
+  "currency": "USD",
+  "paid": false,
+  "payment_splits": {
+    "AIsha": {
+      "email": "manal.aamir.2003@gmail.com",
+      "role": "UI/UX Designer",
+      "hours": 80.0,
+      "percentage": 40.0,
+      "amount": 120.0
+    },
+    "Bilal": {
+      "email": "bilal@gmail.com",
+      "role": "Developer",
+      "hours": 120.0,
+      "percentage": 60.0,
+      "amount": 180.0
+    }
+  },
+  "line_items": [
+    {
+      "description": "Services",
+      "quantity": 1.0,
+      "unit_price": 300.0,
+      "total": 300.0
+    }
+  ],
+  "email_sent": true,
+  "slack_reminders": [
+    "Day 1",
+    "Day 7"
+  ],
+  "pr_url": "dry-run://pr",
+  "agent_log": "/Users/4star/Documents/8th semster/Agentic AI/Assignment 2/logs/ceo_decisions_20260325T133145Z.json",
+  "email_receipt": {
+    "ok": "dry-run"
+  },
+  "reminder_receipts": {
+    "day_1": {
+      "days_overdue": 1,
+      "action_taken": "day_1_slack",
+      "receipts": {
+        "slack": {
+          "ok": "dry-run",
+          "day": 1
+        }
+      }
+    }
+  },
+  "issue_url": "dry-run://issue"
+}

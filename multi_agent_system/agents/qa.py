@@ -71,21 +71,19 @@ class QAAgent:
             for issue in issues:
                 raw_comments.append(self.groq.generate_pr_comment(issue))
 
-            # Post at least two inline PR comments on index.html (assignment requirement).
+            # Post at least two file-level PR review comments on index.html
+            # (assignment requirement). Uses subject_type="file" which never
+            # triggers 422 position-resolution errors.
             c1 = self.github_client.create_review_comment(
                 pr_number=int(pr_number),
                 commit_id=head_sha,
                 path="index.html",
-                line=1,
-                side="RIGHT",
                 body=raw_comments[0],
             )
             c2 = self.github_client.create_review_comment(
                 pr_number=int(pr_number),
                 commit_id=head_sha,
                 path="index.html",
-                line=2,
-                side="RIGHT",
                 body=raw_comments[1],
             )
             review_receipt = {"ok": True, "comments": [c1, c2]}

@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InvoiceHound — Pipeline Running</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    nav { background: #1e293b; padding: 14px 32px; display: flex; align-items: center; gap: 28px;
+          border-bottom: 1px solid #334155; }
+    nav .brand { font-size: 20px; font-weight: 700; color: #22c55e; text-decoration: none; }
+    nav a { color: #94a3b8; text-decoration: none; font-size: 14px; }
+    nav a:hover { color: #e2e8f0; }
+    .container { max-width: 720px; margin: 0 auto; padding: 52px 20px; }
+    h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+    .subtitle { color: #64748b; font-size: 15px; margin-bottom: 40px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px;
+            padding: 28px; margin-bottom: 20px; }
+    .card h3 { font-size: 15px; color: #94a3b8; text-transform: uppercase;
+               letter-spacing: .5px; margin-bottom: 18px; font-weight: 600; }
+
+    /* ── Agent steps ── */
+    .step-list { display: flex; flex-direction: column; gap: 0; }
+    .step-row {
+      display: flex; align-items: center; gap: 14px; padding: 13px 0;
+      border-bottom: 1px solid #0f172a;
+    }
+    .step-row:last-child { border-bottom: none; }
+    .step-icon { font-size: 20px; width: 32px; text-align: center; flex-shrink: 0; }
+    .step-info { flex: 1; }
+    .step-info strong { display: block; font-size: 14px; color: #f1f5f9; }
+    .step-info span   { font-size: 12px; color: #64748b; }
+    .status-badge {
+      font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 12px;
+      text-transform: uppercase; letter-spacing: .4px; white-space: nowrap;
+    }
+    .s-done    { background: #14532d; color: #86efac; }
+    .s-running { background: #1e3a5f; color: #93c5fd; }
+    .s-wait    { background: #1e293b; color: #475569; border: 1px solid #334155; }
+
+    /* ── Result links ── */
+    .result-row { display: flex; align-items: center; justify-content: space-between;
+                  padding: 12px 0; border-bottom: 1px solid #0f172a; font-size: 14px; }
+    .result-row:last-child { border-bottom: none; }
+    .result-row span { color: #94a3b8; }
+    .result-row a { color: #22c55e; text-decoration: none; font-weight: 600; font-size: 13px; }
+    .result-row a:hover { text-decoration: underline; }
+    .result-row .na { color: #475569; font-size: 13px; }
+
+    /* ── Spinner ── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      display: inline-block; width: 14px; height: 14px; border: 2px solid #334155;
+      border-top-color: #3b82f6; border-radius: 50%; animation: spin .7s linear infinite;
+      vertical-align: middle; margin-right: 6px;
+    }
+
+    /* ── Buttons ── */
+    .btn { display: inline-block; padding: 10px 20px; border-radius: 8px; font-size: 14px;
+           font-weight: 600; cursor: pointer; border: none; text-decoration: none; }
+    .btn-green  { background: #22c55e; color: #052e16; }
+    .btn-blue   { background: #3b82f6; color: #fff; }
+    .btn-gray   { background: #334155; color: #e2e8f0; }
+    .btn:hover { opacity: .88; }
+    .actions { display: flex; gap: 12px; margin-top: 24px; flex-wrap: wrap; }
+
+    /* ── QA comments ── */
+    .comment-box {
+      background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+      padding: 12px 14px; margin-top: 8px; font-size: 13px; color: #cbd5e1;
+      font-style: italic; border-left: 3px solid #3b82f6;
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="brand">🐕 InvoiceHound</a>
+  <a href="/invoice">New Invoice</a>
+  <a href="/dashboard">Dashboard</a>
+  <a href="/messages" style="color:#818cf8">Message History</a>
+</nav>
+
+<div class="container">
+
+  <h1>
+    {% if pipeline.get('done') %}
+      ✅ Pipeline Complete
+    {% else %}
+      <span class="spinner"></span> Pipeline Running…
+    {% endif %}
+  </h1>
+  <p class="subtitle">
+    Build request: <strong style="color:#f1f5f9">{{ pipeline.project_name }}</strong>
+    &nbsp;·&nbsp; Client: <strong style="color:#f1f5f9">{{ pipeline.client_name }}</strong>
+    &nbsp;·&nbsp; Invoice: <code style="color:#94a3b8">{{ pipeline.invoice_id }}</code>
+  </p>
+
+  <!-- ── Agent steps ── -->
+  <div class="card">
+    <h3>Agent Pipeline</h3>
+    <div class="step-list">
+
+      {% set steps = [
+        ('🧠', 'CEO Agent', 'Decomposes request → tasks', 'ceo'),
+        ('📋', 'Product Agent', 'Generates spec: personas, features, user stories', 'product'),
+        ('⚙️', 'Engineer Agent', 'Creates GitHub issue, branch, commits index.html, opens PR', 'engineer'),
+        ('📣', 'Marketing Agent', 'Sends cold email + posts Slack Block Kit to #launches', 'marketing'),
+        ('🔍', 'QA Agent', 'Reviews HTML + copy, posts 2 inline PR comments', 'qa'),
+      ] %}
+
+      {% for icon, name, desc, key in steps %}
+      {% set done = pipeline.get('agent_done', {}).get(key, False) %}
+      {% set active = pipeline.get('agent_active') == key %}
+      <div class="step-row">
+        <div class="step-icon">{{ icon }}</div>
+        <div class="step-info">
+          <strong>{{ name }}</strong>
+          <span>{{ desc }}</span>
+        </div>
+        {% if done %}
+          <span class="status-badge s-done">✓ Done</span>
+        {% elif active %}
+          <span class="status-badge s-running"><span class="spinner"></span>Running</span>
+        {% else %}
+          <span class="status-badge s-wait">Waiting</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+
+    </div>
+  </div>
+
+  <!-- ── Results ── -->
+  <div class="card">
+    <h3>Results</h3>
+    <div>
+
+      <div class="result-row">
+        <span>GitHub Issue</span>
+        {% if pipeline.get('issue_url') %}
+          <a href="{{ pipeline.issue_url }}" target="_blank">{{ pipeline.issue_url }}</a>
+        {% else %}
+          <span class="na">Pending…</span>
+        {% endif %}
+      </div>
+
+      <div class="result-row">
+        <span>GitHub PR</span>
+        {% if pipeline.get('pr_url') %}
+          <a href="{{ pipeline.pr_url }}" target="_blank">{{ pipeline.pr_url }}</a>
+        {% else %}
+          <span class="na">Pending…</span>
+        {% endif %}
+      </div>
+
+      <div class="result-row">
+        <span>Marketing Email</span>
+        {% if pipeline.get('email_sent') %}
+          <span class="status-badge s-done">✓ Sent</span>
+        {% else %}
+          <span class="na">Pending…</span>
+        {% endif %}
+      </div>
+
+      <div class="result-row">
+        <span>Slack Launch Post</span>
+        {% if pipeline.get('slack_ok') %}
+          <span class="status-badge s-done">✓ Posted</span>
+        {% else %}
+          <span class="na">Pending…</span>
+        {% endif %}
+      </div>
+
+      <div class="result-row">
+        <span>QA Verdict</span>
+        {% if pipeline.get('qa_passed') is not none %}
+          {% if pipeline.qa_passed %}
+            <span class="status-badge s-done">✓ Passed</span>
+          {% else %}
+            <span class="status-badge" style="background:#450a0a;color:#fca5a5">✗ Failed</span>
+          {% endif %}
+        {% else %}
+          <span class="na">Pending…</span>
+        {% endif %}
+      </div>
+
+      <div class="result-row">
+        <span>CEO Slack Summary</span>
+        {% if pipeline.get('slack_summary_ok') %}
+          <span class="status-badge s-done">✓ Posted</span>
+        {% else %}
+          <span class="na">Pending…</span>
+        {% endif %}
+      </div>
+
+    </div>
+
+    <!-- QA Comments -->
+    {% if pipeline.get('qa_comments') %}
+    <div style="margin-top:18px">
+      <div style="font-size:13px;color:#64748b;margin-bottom:8px">QA Inline PR Comments</div>
+      {% for c in pipeline.qa_comments %}
+        <div class="comment-box">"{{ c }}"</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if pipeline.get('agent_error') %}
+      <div style="margin-top:14px;padding:12px 14px;background:#450a0a;border-radius:8px;font-size:13px;color:#fca5a5">
+        Error: {{ pipeline.agent_error }}
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- ── Actions ── -->
+  <div class="actions">
+    {% if pipeline.get('done') %}
+      <a href="/dashboard" class="btn btn-green">View Dashboard</a>
+      <a href="/messages" class="btn btn-blue">Message History</a>
+      {% if pipeline.get('pr_url') %}
+        <a href="{{ pipeline.pr_url }}" class="btn btn-gray" target="_blank">View GitHub PR</a>
+      {% endif %}
+    {% else %}
+      <span style="color:#64748b;font-size:14px">
+        <span class="spinner"></span> Auto-refreshing every 5 seconds…
+      </span>
+    {% endif %}
+    <a href="/" class="btn btn-gray">New Request</a>
+  </div>
+
+</div>
+
+{% if not pipeline.get('done') %}
+<script>
+  setTimeout(() => location.reload(), 5000);
+</script>
+{% endif %}
+
+</body>
+</html>

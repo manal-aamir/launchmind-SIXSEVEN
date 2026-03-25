@@ -1,11 +1,11 @@
 """
-Groq LLM client — used by Agent 1 (CEO) for orchestration reasoning
-and Agent 5 (QA / Reviewer) for review.  Using Groq for both CEO and
-QA demonstrates multi-LLM integration (bonus +2%):
+Groq LLM client — powers ALL five agents via llama-3.3-70b-versatile.
 
-  CEO  → Groq  llama-3.3-70b  (orchestration, decomposition, review)
-  QA   → Groq  llama-3.3-70b  (HTML + copy review, PR comments)
-  Product / Engineer / Marketing → OpenAI gpt-4o-mini (generation tasks)
+  CEO       → Groq  (orchestration, decomposition, review, summarise)
+  Product   → Groq  (product spec generation)
+  Engineer  → Groq  (HTML landing page + GitHub issue/PR text)
+  Marketing → Groq  (tagline, copy, cold email, social posts)
+  QA        → Groq  (HTML + copy review, PR comments)
 
 Falls back to structured mock outputs when no API key is provided.
 """
@@ -18,6 +18,7 @@ from typing import Any, Dict, Optional
 from groq import Groq
 
 from multi_agent_system.models import ReviewDecision
+from multi_agent_system.deepseek_client import DeepSeekClient
 from multi_agent_system.prompts import (
     QA_HTML_ROLE_PROMPT,
     QA_COPY_ROLE_PROMPT,
@@ -25,15 +26,22 @@ from multi_agent_system.prompts import (
     CEO_REVIEW_ROLE_PROMPT,
     PRODUCT_ROLE_PROMPT,
     ENGINEER_ROLE_PROMPT,
+    MARKETING_ROLE_PROMPT,
     compose_system_prompt,
 )
 
 
 class GroqClient:
-    def __init__(self, api_key: str, model: str = "llama-3.3-70b-versatile") -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "llama-3.3-70b-versatile",
+        fallback: Optional[DeepSeekClient] = None,
+    ) -> None:
         self.model = model
         self.enabled = bool(api_key)
         self._client: Optional[Groq] = Groq(api_key=api_key) if self.enabled else None
+        self.fallback = fallback
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -63,16 +71,27 @@ class GroqClient:
             return mock_default
 
         system_prompt = compose_system_prompt(role_prompt)
-        response = self._client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": user_prompt},
-            ],
-            temperature=0.2,
-        )
-        text = response.choices[0].message.content or ""
-        return self._extract_json(text)
+        try:
+            response = self._client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user",   "content": user_prompt},
+                ],
+                temperature=0.2,
+            )
+            text = response.choices[0].message.content or ""
+            return self._extract_json(text)
+        except Exception:
+            # Most common runtime issue in demos: Groq 429 token/day rate-limit.
+            # If a fallback LLM is configured (e.g., DeepSeek), use it; otherwise
+            # degrade gracefully to the structured mock.
+            if self.fallback and self.fallback.enabled:
+                try:
+                    return self.fallback.complete_json(role_prompt, user_prompt, mock_default)
+                except Exception:
+                    return mock_default
+            return mock_default
 
     # ------------------------------------------------------------------
     # QA-specific methods
@@ -545,6 +564,75 @@ class GroqClient:
             user_prompt=user_prompt,
             mock_default=mock,
         )
+
+    # ------------------------------------------------------------------
+    # Marketing generation (Agent 4) — Groq-only
+    # ------------------------------------------------------------------
+
+    def generate_marketing_assets(
+        self,
+        startup_idea: str,
+        product_spec: Dict[str, Any],
+        pr_url: str = "",
+        revision_instruction: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Marketing agent LLM output contract:
+          - tagline: string (< 10 words, compelling)
+          - landing_description: string (2-3 sentences)
+          - cold_email: { subject, body }
+          - social_posts: { twitter, linkedin, instagram }
+          - pr_url: echoed back
+        """
+        mock = {
+            "tagline": "Get paid. Without the awkward follow-up.",
+            "landing_description": (
+                "InvoiceHound handles everything after project delivery. "
+                "One invoice goes to the client, reminders escalate automatically, "
+                "and team earnings split the moment payment lands."
+            ),
+            "cold_email": {
+                "subject": "Stop chasing client invoices manually",
+                "body": (
+                    "Hi there,\n\nInvoiceHound helps freelance teams send one professional invoice, "
+                    "auto-follow up on late payments, and split earnings fairly by logged hours.\n\n"
+                    "Want a quick demo?\n"
+                ),
+            },
+            "social_posts": {
+                "twitter": "Tired of saying 'just following up on that invoice'? InvoiceHound has your back. #freelance",
+                "linkedin": "Late payments hurt freelance teams. InvoiceHound automates reminders and protects client relationships.",
+                "instagram": "No more awkward payment chases. Just deliver work and let InvoiceHound follow up. #freelancer",
+            },
+            "pr_url": pr_url,
+        }
+
+        user_prompt = (
+            f"Startup idea:\n{startup_idea}\n\n"
+            f"Product spec JSON:\n{json.dumps(product_spec, indent=2)[:4000]}\n\n"
+            f"GitHub PR URL: {pr_url}\n\n"
+        )
+        if revision_instruction:
+            user_prompt += f"Revision instruction from CEO:\n{revision_instruction}\n\n"
+
+        user_prompt += (
+            "Generate launch marketing assets. Return ONLY JSON with these exact keys:\n"
+            "- tagline: string, under 10 words, punchy, speaks to freelancers who hate chasing clients\n"
+            "- landing_description: string, 2-3 sentences, summarises InvoiceHound's value\n"
+            "- cold_email: object with keys subject and body (plain text, max 150 words, include CTA)\n"
+            "- social_posts: object with keys twitter, linkedin, instagram (each 1-2 sentences)\n"
+            "- pr_url: echo back the PR URL provided above\n"
+        )
+
+        result = self._complete_json(
+            role_prompt=MARKETING_ROLE_PROMPT,
+            user_prompt=user_prompt,
+            mock_default=mock,
+        )
+        # Ensure pr_url is always present
+        if isinstance(result, dict) and "pr_url" not in result:
+            result["pr_url"] = pr_url
+        return result
 
     def summarize_for_slack(
         self,

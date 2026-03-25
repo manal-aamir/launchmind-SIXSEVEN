@@ -75,3 +75,10 @@ ENGINEER_ROLE_PROMPT = (
     "with headline, subheadline, features section, CTA button, and basic CSS. "
     "You also draft GitHub issue and pull request text. Return ONLY valid JSON."
 )
+
+MARKETING_ROLE_PROMPT = (
+    "You are the Marketing Agent for a B2B SaaS startup. Your job is to produce compelling, "
+    "freelancer-focused launch copy: a tagline, landing page description, cold outreach email, "
+    "and three social media posts. Tone must speak directly to freelancers who are frustrated "
+    "by chasing late-paying clients. Return ONLY valid JSON."
+)

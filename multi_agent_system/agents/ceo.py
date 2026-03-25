@@ -1,9 +1,11 @@
 """CEO orchestrator agent — InvoiceHound.
 
 Multi-LLM setup (bonus +2%):
-  CEO  → GroqClient  (llama-3.3-70b) for decomposition, review, summarise
-  QA   → GroqClient  (llama-3.3-70b) for HTML/copy review
-  Product / Engineer / Marketing → LLMClient (OpenAI gpt-4o-mini) for generation
+  CEO      → GroqClient (llama-3.3-70b) for decomposition, review, summarise
+  Product  → GroqClient (llama-3.3-70b) for spec generation
+  Engineer → GroqClient (llama-3.3-70b) for HTML + GitHub text generation
+  Marketing→ GroqClient (llama-3.3-70b) for copy + email + social posts
+  QA       → GroqClient (llama-3.3-70b) for HTML/copy review
 
 Every inter-agent message is routed through MessageBus (and optionally
 RedisBus) using the assignment-specified JSON schema (Section 4.1).
@@ -36,7 +38,6 @@ from multi_agent_system.groq_client import GroqClient
 from multi_agent_system.integrations.github_client import GitHubClient
 from multi_agent_system.integrations.sendgrid_client import SendGridClient
 from multi_agent_system.integrations.slack_client import SlackClient
-from multi_agent_system.llm_client import LLMClient
 from multi_agent_system.redis_bus import RedisBus
 from multi_agent_system.models import (
     DecisionLogEntry,
@@ -49,8 +50,7 @@ from multi_agent_system.retry import AgentFailure, safe_call
 class CEOAgent:
     def __init__(
         self,
-        llm: LLMClient,                   # OpenAI — used by Product/Engineer/Marketing
-        groq_client: GroqClient,          # Groq   — used by CEO + QA (multi-LLM)
+        groq_client: GroqClient,          # Groq — all LLM work (CEO + all agents)
         slack_client: SlackClient,
         github_client: GitHubClient,
         sendgrid_client: SendGridClient,
@@ -61,8 +61,7 @@ class CEOAgent:
         max_revisions: int = 2,           # multiple feedback loops — bonus +2%
         redis_bus: Optional[RedisBus] = None,  # Redis pub/sub transport (bonus)
     ) -> None:
-        self.llm              = llm           # OpenAI — for generation agents
-        self.groq             = groq_client   # Groq   — CEO's reasoning brain
+        self.groq             = groq_client   # Groq — all agent LLM work
         self.redis_bus       = redis_bus
         self.slack_client     = slack_client
         self.github_client    = github_client
@@ -90,7 +89,7 @@ class CEOAgent:
             groq_client, github_client=github_client, dry_run=dry_run_actions
         )
         self.marketing_agent = MarketingAgent(
-            llm,
+            groq_client,
             sendgrid_client=sendgrid_client,
             slack_client=slack_client,
             launches_channel_id=launches_channel_id,
@@ -583,8 +582,31 @@ class CEOAgent:
             fallback={},
         )
         if failure or not decomposition:
-            self._log_failure(failure)  # type: ignore[arg-type]
-            decomposition = self.llm.decompose_startup_idea(startup_idea)  # OpenAI fallback
+            if failure:
+                self._log_failure(failure)
+            # Groq failed; use the structured mock built into GroqClient
+            decomposition = self.groq.decompose_startup_idea.__func__.__defaults__  # type: ignore[union-attr]
+            decomposition = self.groq._complete_json(
+                role_prompt="",
+                user_prompt="",
+                mock_default={
+                    "product_task": {
+                        "task_brief": "Define InvoiceHound personas, value proposition, ranked core features, and user stories.",
+                        "expected_output": ["Value proposition", "Three personas", "Five ranked features", "Three user stories"],
+                        "constraints": ["Must cover Day 1/7/14 escalation.", "Must cover hour-based split."],
+                    },
+                    "engineer_task": {
+                        "task_brief": "Build index.html landing page and execute GitHub workflow: issue, branch, commit, PR.",
+                        "expected_output": ["HTML", "Issue URL", "PR URL"],
+                        "constraints": ["Branch: agent-landing-page."],
+                    },
+                    "marketing_task": {
+                        "task_brief": "Generate launch copy, send email via SendGrid, post Slack Block Kit to #launches.",
+                        "expected_output": ["Tagline", "Description", "Cold email", "Social posts"],
+                        "constraints": ["Tone for freelancers frustrated by chasing clients."],
+                    },
+                },
+            )
         self._log("decompose", "CEO (Groq) decomposed startup idea.", decomposition)
 
         product_task   = self._build_task(startup_idea, "product",   decomposition.get("product_task",   {}))

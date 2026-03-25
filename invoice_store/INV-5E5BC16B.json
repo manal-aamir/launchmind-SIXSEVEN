@@ -1,0 +1,168 @@
+{
+  "invoice_id": "INV-5E5BC16B",
+  "project_name": "Aangan",
+  "client_name": "Manal Aamir",
+  "client_email": "i221940@nu.edu.pk",
+  "issue_date": "2026-03-25",
+  "due_date": "2026-04-08",
+  "total_amount": 799.95,
+  "currency": "USD",
+  "paid": true,
+  "payment_splits": {
+    "Aleeza Aamir": {
+      "email": "manal.aamir.2003@gmail.com",
+      "role": "UI/UX Designer",
+      "hours": 90.0,
+      "percentage": 100.0,
+      "amount": 799.95
+    }
+  },
+  "line_items": [
+    {
+      "description": "UI/UX Design",
+      "quantity": 1.0,
+      "unit_price": 799.95,
+      "total": 799.95
+    }
+  ],
+  "email_sent": true,
+  "slack_reminders": [
+    "Day 1",
+    "Day 7",
+    "Day 14"
+  ],
+  "pr_url": "",
+  "agent_log": "",
+  "email_receipt": {
+    "ok": "True",
+    "status_code": "202",
+    "error": ""
+  },
+  "reminder_receipts": {
+    "day_1": {
+      "days_overdue": 1,
+      "action_taken": "day_1_slack",
+      "receipts": {
+        "slack": {
+          "ok": true,
+          "channel": "C0ANVB4HEE8",
+          "ts": "1774446350.237419",
+          "message": {
+            "user": "U0ANKAYT6RH",
+            "type": "message",
+            "ts": "1774446350.237419",
+            "bot_id": "B0ANVA60TBN",
+            "app_id": "A0ANK609AGK",
+            "text": "Payment reminder (Day 1): INV-5E5BC16B",
+            "team": "T71NF2AUX",
+            "bot_profile": {
+              "id": "B0ANVA60TBN",
+              "app_id": "A0ANK609AGK",
+              "user_id": "U0ANKAYT6RH",
+              "name": "LaunchMind Bot",
+              "icons": {
+                "image_36": "https://a.slack-edge.com/80588/img/plugins/app/bot_36.png",
+                "image_48": "https://a.slack-edge.com/80588/img/plugins/app/bot_48.png",
+                "image_72": "https://a.slack-edge.com/80588/img/plugins/app/service_72.png"
+              },
+              "deleted": false,
+              "updated": 1774436590,
+              "team_id": "T71NF2AUX"
+            },
+            "blocks": [
+              {
+                "type": "header",
+                "block_id": "TtWaf",
+                "text": {
+                  "type": "plain_text",
+                  "text": "Payment reminder: Aangan",
+                  "emoji": true
+                }
+              },
+              {
+                "type": "section",
+                "block_id": "md+Sy",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Hi team \u2014 friendly heads up that invoice *INV-5E5BC16B* sent to *Manal Aamir* is now due.\n\n*Amount:* USD 799.95\n*Due date:* 2026-04-08\n\nClient has been notified. We'll follow up automatically.",
+                  "verbatim": false
+                }
+              },
+              {
+                "type": "context",
+                "block_id": "aWMXB",
+                "elements": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "InvoiceHound \u2022 Day 1 reminder \u2022 Polite tone",
+                    "verbatim": false
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "agent_error": "HTTP Error 422: Unprocessable Entity",
+  "split_slack_receipt": {
+    "ok": true,
+    "channel": "C0ANVB4HEE8",
+    "ts": "1774446440.129239",
+    "message": {
+      "user": "U0ANKAYT6RH",
+      "type": "message",
+      "ts": "1774446440.129239",
+      "bot_id": "B0ANVA60TBN",
+      "app_id": "A0ANK609AGK",
+      "text": "Payment received: Aangan",
+      "team": "T71NF2AUX",
+      "bot_profile": {
+        "id": "B0ANVA60TBN",
+        "app_id": "A0ANK609AGK",
+        "user_id": "U0ANKAYT6RH",
+        "name": "LaunchMind Bot",
+        "icons": {
+          "image_36": "https://a.slack-edge.com/80588/img/plugins/app/bot_36.png",
+          "image_48": "https://a.slack-edge.com/80588/img/plugins/app/bot_48.png",
+          "image_72": "https://a.slack-edge.com/80588/img/plugins/app/service_72.png"
+        },
+        "deleted": false,
+        "updated": 1774436590,
+        "team_id": "T71NF2AUX"
+      },
+      "blocks": [
+        {
+          "type": "header",
+          "block_id": "FtJ8u",
+          "text": {
+            "type": "plain_text",
+            "text": "Payment received: Aangan",
+            "emoji": true
+          }
+        },
+        {
+          "type": "section",
+          "block_id": "SfqTj",
+          "text": {
+            "type": "mrkdwn",
+            "text": "Payment received for *Aangan* (Invoice INV-5E5BC16B) \u2014 USD 799.95\n\n*Team split:*\n  \u2022 Aleeza Aamir: USD 799.95 (90.0h, 100.0%)",
+            "verbatim": false
+          }
+        },
+        {
+          "type": "context",
+          "block_id": "pSShX",
+          "elements": [
+            {
+              "type": "mrkdwn",
+              "text": "InvoiceHound \u2022 Splits calculated by hours worked",
+              "verbatim": false
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

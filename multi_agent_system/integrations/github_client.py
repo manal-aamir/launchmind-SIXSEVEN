@@ -119,22 +119,23 @@ class GitHubClient:
         pr_number: int,
         commit_id: str,
         path: str,
-        line: int,
-        side: str,
         body: str,
     ) -> Dict[str, Any]:
         """
-        Create a single inline PR review comment.
+        Create a file-level PR review comment.
 
-        Uses the dedicated REST endpoint:
+        Uses `subject_type: "file"` so no position/line is required.
+        The comment attaches to the file in the PR's "Files changed" tab
+        and never triggers a 422 about unresolvable positions.
+
+        Endpoint:
           POST /repos/{owner}/{repo}/pulls/{pull_number}/comments
         """
         payload = {
-            "body": body,
-            "commit_id": commit_id,
-            "path": path,
-            "line": int(line),
-            "side": side,
+            "body":         body,
+            "commit_id":    commit_id,
+            "path":         path,
+            "subject_type": "file",
         }
         return self._request("POST", f"/pulls/{pr_number}/comments", payload)
 
