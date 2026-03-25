@@ -123,11 +123,32 @@
     .btn:hover { transform: translateY(-1px); filter: brightness(1.03); box-shadow: 0 16px 40px rgba(0,0,0,.32); }
     .btn:active { transform: translateY(0px) scale(.99); }
 
-    .btn-gray   { background: rgba(30, 41, 59, .65); border-color: rgba(148,163,184,.18); }
-    .btn-blue   { background: linear-gradient(135deg, rgba(59,130,246,.95), rgba(99,102,241,.95)); border-color: rgba(255,255,255,.18); }
-    .btn-green  { background: linear-gradient(135deg, rgba(34,197,94,.95), rgba(16,185,129,.95)); border-color: rgba(255,255,255,.18); color: #042f1a; }
-    .btn-yellow { background: linear-gradient(135deg, rgba(245,158,11,.95), rgba(251,191,36,.95)); border-color: rgba(255,255,255,.18); color: #1f1303; }
-    .btn-red    { background: linear-gradient(135deg, rgba(239,68,68,.95), rgba(244,63,94,.95)); border-color: rgba(255,255,255,.18); }
+    /* “Nude” palette: muted stone/taupe with subtle accent tints */
+    .btn-gray   {
+      background: linear-gradient(135deg, rgba(148, 163, 184, .18), rgba(148, 163, 184, .10));
+      border-color: rgba(226, 232, 240, .14);
+      color: rgba(226, 232, 240, .88);
+    }
+    .btn-blue   {
+      background: linear-gradient(135deg, rgba(199, 210, 254, .22), rgba(148, 163, 184, .12));
+      border-color: rgba(226, 232, 240, .14);
+      color: rgba(226, 232, 240, .92);
+    }
+    .btn-green  {
+      background: linear-gradient(135deg, rgba(220, 252, 231, .22), rgba(148, 163, 184, .10));
+      border-color: rgba(226, 232, 240, .14);
+      color: rgba(226, 232, 240, .92);
+    }
+    .btn-yellow {
+      background: linear-gradient(135deg, rgba(254, 249, 195, .22), rgba(148, 163, 184, .10));
+      border-color: rgba(226, 232, 240, .14);
+      color: rgba(226, 232, 240, .92);
+    }
+    .btn-red    {
+      background: linear-gradient(135deg, rgba(254, 226, 226, .22), rgba(148, 163, 184, .10));
+      border-color: rgba(226, 232, 240, .14);
+      color: rgba(226, 232, 240, .92);
+    }
     .tag { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
     .tag-unpaid  { background: #fef9c3; color: #92400e; }
     .tag-paid    { background: #dcfce7; color: #15803d; }
