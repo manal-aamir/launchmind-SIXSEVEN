@@ -6,16 +6,93 @@
   <title>InvoiceHound 🐕 {% block title %}{% endblock %}</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
-    nav { background: #1e293b; padding: 14px 32px; display: flex; align-items: center; gap: 28px;
-          border-bottom: 1px solid #334155; }
-    nav .brand { font-size: 20px; font-weight: 700; color: #22c55e; text-decoration: none; }
-    nav a { color: #94a3b8; text-decoration: none; font-size: 14px; }
-    nav a:hover { color: #e2e8f0; }
-    .container { max-width: 1000px; margin: 0 auto; padding: 36px 20px; }
+
+    /* ── Theme (gradient + glass) ───────────────────────────────────── */
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+      color: #e2e8f0;
+      min-height: 100vh;
+      background:
+        radial-gradient(900px 500px at 15% 8%, rgba(168, 85, 247, .35), transparent 55%),
+        radial-gradient(900px 520px at 85% 12%, rgba(59, 130, 246, .28), transparent 55%),
+        radial-gradient(900px 520px at 45% 92%, rgba(34, 197, 94, .18), transparent 55%),
+        linear-gradient(180deg, #0b1020 0%, #070b16 100%);
+    }
+
+    .page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 26px 18px 46px;
+    }
+
+    /* ── Navbar (pill) ─────────────────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 18px;
+    }
+    .nav-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, .22);
+      background: rgba(15, 23, 42, .55);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 18px 60px rgba(0, 0, 0, .35);
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-weight: 800;
+      text-decoration: none;
+      color: #e2e8f0;
+      letter-spacing: .2px;
+    }
+    .brand .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, .18);
+    }
+    .nav-link {
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 700;
+      color: rgba(226, 232, 240, .72);
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      transition: background .15s, border-color .15s, color .15s;
+    }
+    .nav-link:hover {
+      color: #e2e8f0;
+      background: rgba(148, 163, 184, .10);
+      border-color: rgba(148, 163, 184, .18);
+    }
+    .nav-link.active {
+      color: #0b1020;
+      background: linear-gradient(135deg, rgba(168, 85, 247, .95), rgba(59, 130, 246, .95));
+      border-color: rgba(255, 255, 255, .25);
+    }
+
+    .container { padding: 0; }
     h1 { font-size: 28px; margin-bottom: 6px; }
     h2 { font-size: 20px; margin-bottom: 14px; color: #cbd5e1; }
-    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 28px; margin-bottom: 20px; }
+    .card {
+      background: rgba(15, 23, 42, .65);
+      border: 1px solid rgba(148, 163, 184, .18);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 20px;
+      backdrop-filter: blur(8px);
+    }
     label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 5px; margin-top: 14px; }
     input, select, textarea {
       width: 100%; padding: 9px 12px; background: #0f172a; border: 1px solid #334155;
@@ -50,19 +127,24 @@
   </style>
 </head>
 <body>
-<nav>
-  <a href="/" class="brand">🐕 InvoiceHound</a>
-  <a href="/invoice">New Invoice</a>
-  <a href="/dashboard">Dashboard</a>
-  <a href="/messages" style="color:#818cf8">Messages</a>
-</nav>
-<div class="container">
+<div class="page">
+  <div class="topbar">
+    <nav class="nav-pill">
+      <a href="/invoice" class="brand"><span class="dot"></span> InvoiceHound</a>
+      <a href="/invoice" class="nav-link {% if request.path.startswith('/invoice') or request.path == '/' %}active{% endif %}">New Invoice</a>
+      <a href="/dashboard" class="nav-link {% if request.path.startswith('/dashboard') %}active{% endif %}">Dashboard</a>
+      <a href="/messages" class="nav-link {% if request.path.startswith('/messages') %}active{% endif %}">Messages</a>
+    </nav>
+  </div>
+
+  <div class="container">
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in messages %}
       <div class="flash flash-{{ 'ok' if cat == 'success' else 'err' }}">{{ msg }}</div>
     {% endfor %}
   {% endwith %}
   {% block content %}{% endblock %}
+</div>
 </div>
 </body>
 </html>
