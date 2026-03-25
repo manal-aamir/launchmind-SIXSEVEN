@@ -1,0 +1,12 @@
+{
+  "startup_idea": "InvoiceHound — a tool for freelance teams that generates one invoice for the client, internally splits earnings by hours logged, and auto-sends escalating payment reminders (Day 1 polite Slack, Day 7 firm Slack, Day 14 formal email with invoice) until the client pays.",
+  "team": [
+    { "name": "Aisha",  "role": "UI/UX Designer",    "email": "i221940@nu.edu.pk", "hours": 40 },
+    { "name": "Bilal",  "role": "Full-Stack Dev",     "email": "i221940@nu.edu.pk", "hours": 60 },
+    { "name": "Sara",   "role": "Copywriter",         "email": "i221940@nu.edu.pk", "hours": 20 }
+  ],
+  "project_name": "Brand Redesign — Acme Corp",
+  "client_name": "Acme Corp",
+  "execute_actions": true,
+  "dry_run": false
+}

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InvoiceHound 🐕 {% block title %}{% endblock %}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    nav { background: #1e293b; padding: 14px 32px; display: flex; align-items: center; gap: 28px;
+          border-bottom: 1px solid #334155; }
+    nav .brand { font-size: 20px; font-weight: 700; color: #22c55e; text-decoration: none; }
+    nav a { color: #94a3b8; text-decoration: none; font-size: 14px; }
+    nav a:hover { color: #e2e8f0; }
+    .container { max-width: 1000px; margin: 0 auto; padding: 36px 20px; }
+    h1 { font-size: 28px; margin-bottom: 6px; }
+    h2 { font-size: 20px; margin-bottom: 14px; color: #cbd5e1; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 28px; margin-bottom: 20px; }
+    label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 5px; margin-top: 14px; }
+    input, select, textarea {
+      width: 100%; padding: 9px 12px; background: #0f172a; border: 1px solid #334155;
+      border-radius: 7px; color: #e2e8f0; font-size: 14px; outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: #22c55e; }
+    .btn { display: inline-block; padding: 10px 20px; border-radius: 8px; font-size: 14px;
+           font-weight: 600; cursor: pointer; border: none; text-decoration: none; }
+    .btn-green  { background: #22c55e; color: #052e16; }
+    .btn-blue   { background: #3b82f6; color: #fff; }
+    .btn-red    { background: #ef4444; color: #fff; }
+    .btn-yellow { background: #f59e0b; color: #1c1917; }
+    .btn-gray   { background: #475569; color: #e2e8f0; }
+    .btn:hover { opacity: .88; }
+    .tag { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .tag-unpaid  { background: #fef9c3; color: #92400e; }
+    .tag-paid    { background: #dcfce7; color: #15803d; }
+    .tag-overdue { background: #fee2e2; color: #991b1b; }
+    .flash { padding: 12px 18px; border-radius: 8px; margin-bottom: 18px; font-size: 14px; }
+    .flash-ok  { background: #14532d; color: #bbf7d0; border: 1px solid #22c55e; }
+    .flash-err { background: #450a0a; color: #fca5a5; border: 1px solid #ef4444; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    .row-group { border: 1px solid #334155; border-radius: 8px; padding: 14px; margin-top: 10px; background: #0f172a; }
+    .add-row-btn { margin-top: 10px; background: none; border: 1px dashed #475569; color: #94a3b8;
+                   padding: 7px 14px; border-radius: 7px; cursor: pointer; font-size: 13px; width: 100%; }
+    .add-row-btn:hover { border-color: #22c55e; color: #22c55e; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { padding: 10px 12px; text-align: left; background: #0f172a; color: #94a3b8; font-size: 12px; text-transform: uppercase; }
+    td { padding: 10px 12px; border-bottom: 1px solid #1e293b; }
+    .mono { font-family: monospace; font-size: 13px; }
+  </style>
+</head>
+<body>
+<nav>
+  <a href="/" class="brand">🐕 InvoiceHound</a>
+  <a href="/">New Invoice</a>
+  <a href="/dashboard">Dashboard</a>
+  <a href="/messages" style="color:#818cf8">Messages</a>
+</nav>
+<div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="flash flash-{{ 'ok' if cat == 'success' else 'err' }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</div>
+</body>
+</html>

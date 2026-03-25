@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}— New Invoice{% endblock %}
+{% block content %}
+<h1>Create New Invoice</h1>
+<p style="color:#64748b;margin-bottom:24px">Fill in the form. InvoiceHound writes the email, sends it to the client, posts Slack reminders, and opens a GitHub PR — automatically.</p>
+
+<form method="POST" action="/submit">
+
+  <!-- ── Project & Client ─────────────────────────────────── -->
+  <div class="card">
+    <h2>Project & Client</h2>
+    <div class="grid2">
+      <div>
+        <label>Project Name</label>
+        <input name="project_name" required placeholder="e.g. Website Redesign — Acme Corp">
+      </div>
+      <div>
+        <label>Days Until Due</label>
+        <input name="days_due" type="number" value="14" min="1" max="90">
+      </div>
+      <div>
+        <label>Client Name</label>
+        <input name="client_name" required placeholder="e.g. Acme Corp">
+      </div>
+      <div>
+        <label>Client Email</label>
+        <input name="client_email" type="email" required placeholder="client@company.com">
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Invoice Items ────────────────────────────────────── -->
+  <div class="card">
+    <h2>Invoice Items</h2>
+    <div id="items-container">
+      <div class="row-group grid3">
+        <div><label>Description</label><input name="item_desc[]" required placeholder="Service description"></div>
+        <div><label>Quantity</label><input name="item_qty[]" type="number" value="1" min="0.01" step="0.01"></div>
+        <div><label>Unit Price (USD)</label><input name="item_price[]" type="number" value="0" min="0" step="0.01"></div>
+      </div>
+    </div>
+    <button type="button" class="add-row-btn" onclick="addItem()">+ Add item</button>
+  </div>
+
+  <!-- ── Team Members ─────────────────────────────────────── -->
+  <div class="card">
+    <h2>Team Members & Hours</h2>
+    <p style="color:#64748b;font-size:13px;margin-bottom:10px">Payment splits are calculated automatically from hours worked.</p>
+    <div id="team-container">
+      <div class="row-group" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
+        <div><label>Name</label><input name="member_name[]" required placeholder="Aisha"></div>
+        <div><label>Role</label><input name="member_role[]" placeholder="UI/UX Designer"></div>
+        <div><label>Email</label><input name="member_email[]" type="email" placeholder="aisha@team.dev"></div>
+        <div><label>Hours Worked</label><input name="member_hours[]" type="number" value="0" min="0" step="0.5"></div>
+      </div>
+    </div>
+    <button type="button" class="add-row-btn" onclick="addMember()">+ Add team member</button>
+  </div>
+
+  <!-- ── Settings ─────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Actions</h2>
+    <div class="grid2">
+      <label style="display:flex;align-items:center;gap:10px;margin-top:0;cursor:pointer">
+        <input type="checkbox" name="send_email" checked style="width:auto">
+        <span>Send invoice email to client via SendGrid</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;margin-top:0;cursor:pointer">
+        <input type="checkbox" name="post_slack" checked style="width:auto">
+        <span>Post Day 1 Slack reminder to team</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;margin-top:0;cursor:pointer">
+        <input type="checkbox" name="run_agents" checked style="width:auto">
+        <span>Run 5-agent pipeline (GitHub PR + marketing Slack)</span>
+      </label>
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-green" style="font-size:16px;padding:14px 32px">
+    🚀 Submit — Let InvoiceHound take over
+  </button>
+</form>
+
+<script>
+function addItem() {
+  const c = document.getElementById('items-container');
+  c.insertAdjacentHTML('beforeend', `
+    <div class="row-group grid3">
+      <div><label>Description</label><input name="item_desc[]" placeholder="Service description"></div>
+      <div><label>Quantity</label><input name="item_qty[]" type="number" value="1" min="0.01" step="0.01"></div>
+      <div><label>Unit Price (USD)</label><input name="item_price[]" type="number" value="0" min="0" step="0.01"></div>
+    </div>`);
+}
+function addMember() {
+  const c = document.getElementById('team-container');
+  c.insertAdjacentHTML('beforeend', `
+    <div class="row-group" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
+      <div><label>Name</label><input name="member_name[]" placeholder="Name"></div>
+      <div><label>Role</label><input name="member_role[]" placeholder="Role"></div>
+      <div><label>Email</label><input name="member_email[]" type="email" placeholder="email@team.dev"></div>
+      <div><label>Hours Worked</label><input name="member_hours[]" type="number" value="0" min="0" step="0.5"></div>
+    </div>`);
+}
+</script>
+{% endblock %}

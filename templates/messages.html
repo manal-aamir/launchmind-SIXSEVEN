@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}Message History — InvoiceHound{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+  <div>
+    <h1 style="font-size:22px;font-weight:800;color:#f1f5f9;margin:0">Agent Message History</h1>
+    <p style="color:#64748b;font-size:13px;margin:4px 0 0">
+      Every inter-agent message — evaluator view: "Show me every message the CEO sent and received"
+    </p>
+  </div>
+  <div style="display:flex;gap:10px">
+    <span style="background:#1e293b;border:1px solid #334155;padding:6px 14px;border-radius:6px;font-size:12px;color:#94a3b8">
+      Total messages: <strong style="color:#f1f5f9">{{ all_messages|length }}</strong>
+    </span>
+    <span style="background:#1e293b;border:1px solid #6366f1;padding:6px 14px;border-radius:6px;font-size:12px;color:#818cf8">
+      CEO messages: <strong style="color:#a5b4fc">{{ ceo_messages|length }}</strong>
+    </span>
+  </div>
+</div>
+
+<!-- Message schema reference -->
+<details style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:14px 18px;margin-bottom:24px">
+  <summary style="cursor:pointer;color:#94a3b8;font-size:13px;font-weight:600">
+    📋 Assignment Message Schema (Section 4.1)
+  </summary>
+  <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div>
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead>
+          <tr style="background:#1e293b">
+            <th style="padding:8px 12px;text-align:left;color:#94a3b8;border:1px solid #334155">Field</th>
+            <th style="padding:8px 12px;text-align:left;color:#94a3b8;border:1px solid #334155">Type</th>
+            <th style="padding:8px 12px;text-align:left;color:#94a3b8;border:1px solid #334155">Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in [
+            ("message_id","string","Unique UUID for this message"),
+            ("from_agent","string","Sender: ceo / product / engineer / marketing / qa"),
+            ("to_agent","string","Receiver agent name"),
+            ("message_type","string","task | result | revision_request | confirmation"),
+            ("payload","object","Actual content — differs per message_type"),
+            ("timestamp","string","ISO 8601 UTC timestamp"),
+            ("parent_message_id","string","ID of message this replies to (optional)"),
+          ] %}
+          <tr style="border:1px solid #334155">
+            <td style="padding:6px 12px;color:#6366f1;font-weight:600">{{ row[0] }}</td>
+            <td style="padding:6px 12px;color:#64748b">{{ row[1] }}</td>
+            <td style="padding:6px 12px;color:#94a3b8">{{ row[2] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <div style="font-size:11px;color:#64748b;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:1px">
+        Example — CEO → Product task
+      </div>
+      <pre style="background:#0f172a;border:1px solid #334155;border-radius:6px;padding:12px;
+                  font-size:11px;color:#a5b4fc;overflow-x:auto;line-height:1.6">{
+  "message_id": "msg-001abc",
+  "from_agent": "ceo",
+  "to_agent": "product",
+  "message_type": "task",
+  "payload": {
+    "idea": "InvoiceHound — freelance invoice tool",
+    "focus": "Define personas and top 5 features"
+  },
+  "timestamp": "2026-03-25T09:00:00Z",
+  "parent_message_id": null
+}</pre>
+    </div>
+  </div>
+</details>
+
+<!-- Tabs -->
+<div style="display:flex;gap:4px;margin-bottom:16px" id="tabs">
+  <button onclick="showTab('ceo')" id="tab-ceo"
+    style="padding:8px 18px;border-radius:6px 6px 0 0;border:1px solid #6366f1;border-bottom:none;
+           background:#6366f1;color:#fff;font-size:13px;font-weight:600;cursor:pointer">
+    CEO Messages ({{ ceo_messages|length }})
+  </button>
+  <button onclick="showTab('all')" id="tab-all"
+    style="padding:8px 18px;border-radius:6px 6px 0 0;border:1px solid #334155;border-bottom:none;
+           background:#1e293b;color:#94a3b8;font-size:13px;cursor:pointer">
+    All Messages ({{ all_messages|length }})
+  </button>
+</div>
+
+<!-- CEO messages panel -->
+<div id="panel-ceo">
+  {% if ceo_messages %}
+  <div style="border:1px solid #6366f1;border-radius:0 8px 8px 8px;overflow:hidden">
+    {% for msg in ceo_messages %}
+    {% set is_sent = msg.from_agent == 'ceo' %}
+    <div style="border-bottom:1px solid #1e293b;padding:14px 18px;
+                background:{{ '#0f172a' if loop.index % 2 == 0 else '#0a0f1a' }}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <!-- Direction badge -->
+          <span style="font-size:16px">{{ '→' if is_sent else '←' }}</span>
+          <span style="background:{{ '#1e40af' if is_sent else '#065f46' }};
+                       color:{{ '#bfdbfe' if is_sent else '#a7f3d0' }};
+                       padding:2px 10px;border-radius:4px;font-size:11px;font-weight:700;
+                       text-transform:uppercase;letter-spacing:1px">
+            {{ 'SENT' if is_sent else 'RECEIVED' }}
+          </span>
+          <!-- Type badge -->
+          {% set type_colors = {
+            'task': ('#7c3aed','#ede9fe'),
+            'result': ('#065f46','#d1fae5'),
+            'revision_request': ('#92400e','#fef3c7'),
+            'confirmation': ('#1e40af','#dbeafe'),
+          } %}
+          {% set tc = type_colors.get(msg.message_type, ('#334155','#94a3b8')) %}
+          <span style="background:{{ tc[0] }};color:{{ tc[1] }};
+                       padding:2px 10px;border-radius:4px;font-size:11px;font-weight:600">
+            {{ msg.message_type }}
+          </span>
+          <span style="font-size:13px;font-weight:600;color:#f1f5f9">
+            {{ msg.from_agent }} → {{ msg.to_agent }}
+          </span>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:#64748b;font-family:monospace">{{ msg.message_id }}</div>
+          <div style="font-size:11px;color:#475569">{{ msg.timestamp }}</div>
+        </div>
+      </div>
+      {% if msg.parent_message_id %}
+      <div style="font-size:11px;color:#475569;margin-bottom:6px">
+        ↳ reply to <span style="font-family:monospace;color:#6366f1">{{ msg.parent_message_id }}</span>
+      </div>
+      {% endif %}
+      <!-- Payload preview -->
+      <details style="margin-top:4px">
+        <summary style="cursor:pointer;font-size:12px;color:#64748b">payload</summary>
+        <pre style="background:#020617;border:1px solid #1e293b;border-radius:4px;
+                    padding:10px;font-size:11px;color:#94a3b8;overflow-x:auto;
+                    max-height:200px;margin-top:6px;white-space:pre-wrap">{{ msg.payload | tojson(indent=2) }}</pre>
+      </details>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div style="background:#0f172a;border:1px solid #334155;border-radius:0 8px 8px 8px;
+              padding:40px;text-align:center;color:#475569">
+    No CEO messages yet. Run the agent pipeline from the dashboard first.
+  </div>
+  {% endif %}
+</div>
+
+<!-- All messages panel -->
+<div id="panel-all" style="display:none">
+  {% if all_messages %}
+  <div style="border:1px solid #334155;border-radius:0 8px 8px 8px;overflow:hidden">
+    {% for msg in all_messages %}
+    <div style="border-bottom:1px solid #1e293b;padding:12px 18px;
+                background:{{ '#0f172a' if loop.index % 2 == 0 else '#0a0f1a' }};
+                display:grid;grid-template-columns:180px 100px 100px 140px 1fr;gap:12px;align-items:center;font-size:12px">
+      <span style="font-family:monospace;color:#6366f1">{{ msg.message_id }}</span>
+      <span style="color:#f1f5f9;font-weight:600">{{ msg.from_agent }}</span>
+      <span style="color:#94a3b8">→ {{ msg.to_agent }}</span>
+      {% set type_colors2 = {
+        'task': '#7c3aed',
+        'result': '#065f46',
+        'revision_request': '#92400e',
+        'confirmation': '#1e40af',
+      } %}
+      <span style="background:{{ type_colors2.get(msg.message_type,'#334155') }};
+                   color:#fff;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600">
+        {{ msg.message_type }}
+      </span>
+      <span style="color:#475569;font-size:11px">{{ msg.timestamp }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div style="background:#0f172a;border:1px solid #334155;border-radius:0 8px 8px 8px;
+              padding:40px;text-align:center;color:#475569">
+    No messages logged yet.
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function showTab(name) {
+  document.getElementById('panel-ceo').style.display = name === 'ceo' ? 'block' : 'none';
+  document.getElementById('panel-all').style.display = name === 'all' ? 'block' : 'none';
+  document.getElementById('tab-ceo').style.background  = name === 'ceo' ? '#6366f1' : '#1e293b';
+  document.getElementById('tab-ceo').style.color       = name === 'ceo' ? '#fff'    : '#94a3b8';
+  document.getElementById('tab-ceo').style.borderColor = name === 'ceo' ? '#6366f1' : '#334155';
+  document.getElementById('tab-all').style.background  = name === 'all' ? '#6366f1' : '#1e293b';
+  document.getElementById('tab-all').style.color       = name === 'all' ? '#fff'    : '#94a3b8';
+  document.getElementById('tab-all').style.borderColor = name === 'all' ? '#6366f1' : '#334155';
+}
+</script>
+{% endblock %}
