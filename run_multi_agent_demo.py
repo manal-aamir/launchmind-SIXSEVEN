@@ -85,6 +85,7 @@ def main() -> None:
     ceo = CEOAgent(
         llm=llm,
         groq_client=groq_client,
+        redis_bus=redis_bus,
         slack_client=slack_client,
         github_client=github_client,
         sendgrid_client=sendgrid_client,

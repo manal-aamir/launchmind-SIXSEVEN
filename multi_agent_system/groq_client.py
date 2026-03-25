@@ -18,6 +18,15 @@ from typing import Any, Dict, Optional
 from groq import Groq
 
 from multi_agent_system.models import ReviewDecision
+from multi_agent_system.prompts import (
+    QA_HTML_ROLE_PROMPT,
+    QA_COPY_ROLE_PROMPT,
+    CEO_DECOMPOSE_ROLE_PROMPT,
+    CEO_REVIEW_ROLE_PROMPT,
+    PRODUCT_ROLE_PROMPT,
+    ENGINEER_ROLE_PROMPT,
+    compose_system_prompt,
+)
 
 
 class GroqClient:
@@ -46,13 +55,14 @@ class GroqClient:
 
     def _complete_json(
         self,
-        system_prompt: str,
+        role_prompt: str,
         user_prompt: str,
         mock_default: Dict[str, Any],
     ) -> Dict[str, Any]:
         if not self.enabled or not self._client:
             return mock_default
 
+        system_prompt = compose_system_prompt(role_prompt)
         response = self._client.chat.completions.create(
             model=self.model,
             messages=[
@@ -82,10 +92,7 @@ class GroqClient:
             ],
         }
         return self._complete_json(
-            system_prompt=(
-                "You are a strict QA reviewer for startup landing pages. "
-                "Return ONLY a valid JSON object — no markdown, no explanation."
-            ),
+            role_prompt=QA_HTML_ROLE_PROMPT,
             user_prompt=(
                 f"Product spec:\n{json.dumps(product_spec, indent=2)}\n\n"
                 f"HTML to review (first 4000 chars):\n{html_content[:4000]}\n\n"
@@ -110,10 +117,7 @@ class GroqClient:
             ],
         }
         return self._complete_json(
-            system_prompt=(
-                "You are a strict QA reviewer for marketing copy. "
-                "Return ONLY a valid JSON object — no markdown, no explanation."
-            ),
+            role_prompt=QA_COPY_ROLE_PROMPT,
             user_prompt=(
                 f"Marketing copy JSON:\n{json.dumps(marketing_copy, indent=2)}\n\n"
                 "Review the InvoiceHound marketing copy. Check:\n"
@@ -150,10 +154,7 @@ class GroqClient:
             ),
         }
         return self._complete_json(
-            system_prompt=(
-                "You write professional, warm invoice emails for freelance teams. "
-                "Return ONLY a valid JSON object — no markdown, no explanation."
-            ),
+            role_prompt="You write professional, warm invoice emails. Return ONLY valid JSON.",
             user_prompt=(
                 f"Write an invoice email with these details:\n"
                 f"Client: {client_name}\n"
@@ -191,10 +192,7 @@ class GroqClient:
                     f"is {days_overdue} day(s) overdue. Amount: {currency} {total_amount:,.2f}.",
         }
         return self._complete_json(
-            system_prompt=(
-                "You write payment reminder messages for freelance teams. "
-                "Return ONLY a valid JSON object — no markdown."
-            ),
+            role_prompt="You write payment reminder messages. Return ONLY valid JSON.",
             user_prompt=(
                 f"Write a {tone} payment reminder:\n"
                 f"Client: {client_name}\n"
@@ -260,10 +258,7 @@ class GroqClient:
             },
         }
         return self._complete_json(
-            system_prompt=(
-                "You are an expert startup CEO assistant. Return ONLY valid JSON — no markdown. "
-                "Break the startup idea into three actionable tasks for Product, Engineer, Marketing agents."
-            ),
+            role_prompt=CEO_DECOMPOSE_ROLE_PROMPT,
             user_prompt=(
                 f"Startup idea: {startup_idea}\n\n"
                 "Return JSON with keys: product_task, engineer_task, marketing_task.\n"
@@ -293,10 +288,7 @@ class GroqClient:
         }
         mock_default = mock_pass if len(json.dumps(agent_output)) > 180 else mock_fail
         result = self._complete_json(
-            system_prompt=(
-                "You are a strict CEO reviewer for a startup. Return ONLY valid JSON. "
-                "Give honest quality scores — do not be generous if the output is thin."
-            ),
+            role_prompt=CEO_REVIEW_ROLE_PROMPT,
             user_prompt=(
                 f"Startup: {startup_idea}\nAgent: {agent_name}\nTask: {task_brief}\n"
                 f"Output: {json.dumps(agent_output)[:3000]}\n\n"
@@ -325,7 +317,7 @@ class GroqClient:
             "follow_up_instruction": "",
         }
         result = self._complete_json(
-            system_prompt="You are a strict CEO reviewer. Return ONLY valid JSON.",
+            role_prompt=CEO_REVIEW_ROLE_PROMPT,
             user_prompt=(
                 f"Startup: {startup_idea}\nProduct spec: {json.dumps(product_output)[:3000]}\n\n"
                 "Check ALL of the following. Fail if ANY are missing:\n"
@@ -343,6 +335,215 @@ class GroqClient:
             score=int(result.get("score", 0)),
             rationale=str(result.get("rationale", "")),
             follow_up_instruction=str(result.get("follow_up_instruction", "")),
+        )
+
+    # ------------------------------------------------------------------
+    # Product-spec generation (for Agent 2) — Groq only (+2% capability)
+    # ------------------------------------------------------------------
+
+    def generate_product_spec(
+        self,
+        startup_idea: str,
+        task_brief: str = "",
+        revision_instruction: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Generate the Product agent JSON spec using Groq.
+
+        Required keys (assignment):
+          - value_proposition: string
+          - personas: [{name, role, pain_point}, ...] (2-3 items)
+          - features: [{name, description, priority}, ...] (5 items, priority 1..5)
+          - user_stories: ["As a ... I want ... so that ...", ...] (3 items)
+
+        This repo historically used `core_features_ranked`; we also return
+        `core_features_ranked` as an alias of `features`.
+        """
+        mock_features = [
+            {
+                "name": "Single invoice per client (team-facing)",
+                "description": "Generate one professional invoice to the client while keeping team split details internal/confidential.",
+                "priority": 1,
+            },
+            {
+                "name": "Hour-based split calculator (internal)",
+                "description": "Compute each member’s share proportionally to hours logged and show it as a confidential split panel/statement.",
+                "priority": 2,
+            },
+            {
+                "name": "Escalating reminder engine (Day 1 / Day 7 / Day 14)",
+                "description": "Send Slack reminders to the team on Day 1 and Day 7, and dispatch a formal email on Day 14 if unpaid.",
+                "priority": 3,
+            },
+            {
+                "name": "AI-written reminders with tone control",
+                "description": "Write polite → firm → formal messages without hardcoding text, using the business logic for each overdue stage.",
+                "priority": 4,
+            },
+            {
+                "name": "Payment notification + internal settlement",
+                "description": "When the client pays, distribute the amount to team members based on hours and notify the team on Slack.",
+                "priority": 5,
+            },
+        ]
+
+        mock = {
+            "value_proposition": (
+                "InvoiceHound helps freelance teams get paid on time by sending one clean invoice and automatically escalating follow-ups—while splitting earnings fairly by hours."
+            ),
+            "personas": [
+                {
+                    "name": "Aisha",
+                    "role": "Freelance UI/UX designer",
+                    "pain_point": "She’s always the one chasing clients for payment, which damages relationships.",
+                },
+                {
+                    "name": "Bilal",
+                    "role": "Full-stack developer (micro-agency)",
+                    "pain_point": "He spends hours calculating payment splits and explaining them to the team.",
+                },
+                {
+                    "name": "Sara",
+                    "role": "Freelance copywriter",
+                    "pain_point": "Past reminder messages felt too harsh, so clients ignore them.",
+                },
+            ],
+            "features": mock_features,
+            "core_features_ranked": mock_features,
+            "user_stories": [
+                "As a freelance team lead, I want one client invoice so internal split details stay private.",
+                "As a team member, I want to preview my exact cut so I trust the settlement calculation.",
+                "As a freelancer, I want automated escalating reminders so I avoid awkward payment conversations.",
+            ],
+            "confirmation_message": "Product spec generated for InvoiceHound.",
+        }
+
+        user_prompt = (
+            f"Startup idea:\n{startup_idea}\n\n"
+            f"Task brief:\n{task_brief}\n\n"
+        )
+        if revision_instruction:
+            user_prompt += f"Revision instruction from CEO:\n{revision_instruction}\n\n"
+
+        user_prompt += (
+            "Generate the product spec JSON with EXACTLY these keys:\n"
+            "value_proposition (string)\n"
+            "personas (array of 2-3 objects: name, role, pain_point)\n"
+            "features (array of exactly 5 objects: name, description, priority (1-5 where 1=highest))\n"
+            "user_stories (array of exactly 3 strings in format: 'As a [user], I want to [action] so that [benefit]')\n"
+            "confirmation_message (string)\n\n"
+            "Business requirements you MUST include in features or user stories:\n"
+            "- Payment reminder escalation: Day 1 polite Slack reminder, Day 7 firm Slack reminder, Day 14 formal email with full HTML invoice.\n"
+            "- Internal payment split logic: split earnings among developers/designers based on logged hours.\n"
+        )
+
+        result = self._complete_json(
+            role_prompt=PRODUCT_ROLE_PROMPT,
+            user_prompt=user_prompt,
+            mock_default=mock,
+        )
+
+        # Always provide `core_features_ranked` alias for this repo’s older expectations.
+        if isinstance(result, dict) and "features" in result and "core_features_ranked" not in result:
+            result["core_features_ranked"] = result["features"]
+        return result
+
+    # ------------------------------------------------------------------
+    # Engineer generation (Agent 3) — Groq-only
+    # ------------------------------------------------------------------
+
+    def generate_engineer_assets(
+        self,
+        startup_idea: str,
+        product_spec: Dict[str, Any],
+        revision_instruction: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Engineer LLM output contract:
+          - html: full working index.html (inline CSS)
+          - issue_body: string (LLM-generated)
+          - pr_title: string (LLM-generated)
+          - pr_body: string (LLM-generated, markdown ok)
+        """
+        mock_html = """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InvoiceHound</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #0b1220; color: #e5e7eb; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 56px 20px; }
+    h1 { font-size: 42px; margin-bottom: 8px; }
+    .sub { color: #cbd5e1; margin-bottom: 28px; }
+    .cta { display: inline-block; padding: 12px 20px; border-radius: 8px; background: #22c55e; color: #07130a; text-decoration: none; font-weight: 700; }
+    .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: 28px 0; }
+    .card { border: 1px solid #1f2937; padding: 16px; border-radius: 10px; background: #111827; }
+    .flow { line-height: 1.9; margin-top: 18px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Your team did the work. We make sure you get paid.</h1>
+    <p class="sub">One invoice to the client. Automatic reminders. Fair splits. Zero awkward conversations.</p>
+    <a class="cta" href=\"#start\">Start Chasing Invoices Free</a>
+    <h2>Features</h2>
+    <div class="grid">
+      <div class="card">Single invoice generation for the whole team</div>
+      <div class="card">Internal hour-based earnings split calculator</div>
+      <div class="card">Escalating reminder engine (Day 1 / Day 7 / Day 14)</div>
+      <div class="card">AI-written reminder emails (friendly / firm / formal)</div>
+      <div class="card">Team payment notification once client pays</div>
+    </div>
+    <h2>How it works</h2>
+    <p class="flow">Log Hours → Send Invoice → Get Paid</p>
+  </div>
+</body>
+</html>"""
+
+        mock = {
+            "html": mock_html,
+            "issue_body": (
+                "Create the initial landing page for InvoiceHound.\n\n"
+                "Requirements:\n"
+                "- Headline/subheadline + CTA\n"
+                "- Features section from product spec\n"
+                "- Basic responsive CSS\n"
+            ),
+            "pr_title": "Initial landing page",
+            "pr_body": (
+                "## Summary\n"
+                "- Adds `index.html` landing page for InvoiceHound.\n\n"
+                "## Test plan\n"
+                "- Open index.html in browser\n"
+            ),
+        }
+
+        user_prompt = (
+            f"Startup idea:\n{startup_idea}\n\n"
+            f"Product spec JSON:\n{json.dumps(product_spec, indent=2)[:6000]}\n\n"
+        )
+        if revision_instruction:
+            user_prompt += f"Revision instruction from CEO:\n{revision_instruction}\n\n"
+
+        user_prompt += (
+            "Generate a complete landing page and GitHub text.\n"
+            "Return ONLY JSON with keys:\n"
+            "- html: full working index.html (inline CSS)\n"
+            "- issue_body: issue description text (no title)\n"
+            "- pr_title: pull request title\n"
+            "- pr_body: pull request body (markdown)\n\n"
+            "Landing page requirements:\n"
+            "- Include headline, subheadline, CTA button\n"
+            "- Include features section that reflects product spec\n"
+            "- Mention reminder escalation (Day 1 / Day 7 / Day 14)\n"
+            "- Mention internal hour-based split logic\n"
+        )
+
+        return self._complete_json(
+            role_prompt=ENGINEER_ROLE_PROMPT,
+            user_prompt=user_prompt,
+            mock_default=mock,
         )
 
     def summarize_for_slack(

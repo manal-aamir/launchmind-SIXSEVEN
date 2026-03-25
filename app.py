@@ -152,6 +152,7 @@ def dashboard():
 @app.route("/submit", methods=["POST"])
 def submit():
     f = request.form
+    development_request = f.get("development_request", "").strip()
 
     # Parse line items
     descs  = f.getlist("item_desc[]")
@@ -239,6 +240,7 @@ def submit():
                 ceo = CEOAgent(
                     llm=llm_client,
                     groq_client=groq_client,
+                    redis_bus=redis_bus,
                     slack_client=slack_client,
                     github_client=github_client,
                     sendgrid_client=sendgrid_client,
@@ -246,12 +248,14 @@ def submit():
                     launches_channel_id=env.get("LAUNCHES_CHANNEL_ID", ""),
                     output_dir=PROJECT_ROOT,
                     dry_run_actions=not execute_actions,
-                    max_revisions=1,
+                    max_revisions=2,
                 )
+                base_request = development_request or inv.project_name
                 idea = (
-                    f"InvoiceHound — {inv.project_name}: generate one professional invoice "
-                    f"for {inv.client_name}, split {inv.total_amount:.0f} USD among "
-                    f"{len(team)} team members by hours, and auto-send escalating payment reminders."
+                    f"InvoiceHound — Build request: {base_request}. "
+                    f"Generate one professional invoice for {inv.client_name}, "
+                    f"split {inv.total_amount:.0f} USD among {len(team)} team members "
+                    f"by hours, and auto-send escalating payment reminders."
                 )
                 result = ceo.run(startup_idea=idea, dry_run=not execute_actions)
                 rec = _load(inv.invoice_id)
