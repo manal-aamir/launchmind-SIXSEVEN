@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from multi_agent_system.groq_client import GroqClient
@@ -69,12 +70,37 @@ class EngineerAgent:
 
         pr_title = str(assets.get("pr_title", "Initial landing page"))
         pr_body = str(assets.get("pr_body", "Adds initial landing page."))
-        pr = self.github_client.create_pr(
-            title=pr_title,
-            body=pr_body,
-            head="agent-landing-page",
-            base=base_branch,
-        )
+        try:
+            pr = self.github_client.create_pr(
+                title=pr_title,
+                body=pr_body,
+                head="agent-landing-page",
+                base=base_branch,
+            )
+        except Exception as exc:
+            # Common GitHub 422 causes:
+            # - PR already exists for the same head/base
+            # - No commits between base and head
+            # In both cases, handle gracefully for demos.
+            existing = self.github_client.list_open_prs(head="agent-landing-page", base=base_branch)
+            if existing:
+                pr = existing[0]
+            else:
+                # Force a tiny change so there is definitely a diff
+                stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                html2 = html + f"\n<!-- build: {stamp} -->\n"
+                self.github_client.upsert_file(
+                    branch="agent-landing-page",
+                    path="index.html",
+                    content_text=html2,
+                    message=f"Update landing page build stamp {stamp}",
+                )
+                pr = self.github_client.create_pr(
+                    title=pr_title,
+                    body=pr_body,
+                    head="agent-landing-page",
+                    base=base_branch,
+                )
         output["pr_url"] = str(pr.get("html_url", ""))
         output["pr_number"] = pr.get("number")
         output["base_branch"] = base_branch

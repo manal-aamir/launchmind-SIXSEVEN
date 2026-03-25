@@ -4,6 +4,7 @@ import base64
 import json
 from typing import Any, Dict, List, Optional
 from urllib import parse, request
+import urllib.error
 
 
 class GitHubClient:
@@ -27,9 +28,27 @@ class GitHubClient:
             },
             method=method,
         )
-        with request.urlopen(req, timeout=30) as resp:
-            body = resp.read().decode("utf-8")
-        return json.loads(body) if body else {}
+        try:
+            with request.urlopen(req, timeout=30) as resp:
+                body = resp.read().decode("utf-8")
+            return json.loads(body) if body else {}
+        except urllib.error.HTTPError as e:
+            raw = ""
+            try:
+                raw = e.read().decode("utf-8")
+            except Exception:
+                raw = ""
+            # Re-raise with GitHub's error payload included for debugging (esp. 422)
+            detail = raw.strip()
+            if detail:
+                raise urllib.error.HTTPError(
+                    e.url,
+                    e.code,
+                    f"{e.msg} — {detail}",
+                    e.hdrs,
+                    e.fp,
+                )
+            raise
 
     def get_repo(self) -> Dict[str, Any]:
         return self._request("GET", "")
@@ -73,6 +92,15 @@ class GitHubClient:
             "/pulls",
             {"title": title, "body": body, "head": head, "base": base},
         )
+
+    def list_open_prs(self, head: str, base: str) -> List[Dict[str, Any]]:
+        """
+        Find an existing open PR for a given head branch and base branch.
+        GitHub expects head in the form owner:branch for this filter.
+        """
+        owner = self.repo.split("/", 1)[0]
+        q = parse.urlencode({"state": "open", "head": f"{owner}:{head}", "base": base})
+        return list(self._request("GET", f"/pulls?{q}") or [])
 
     def get_pr(self, pr_number: int) -> Dict[str, Any]:
         return self._request("GET", f"/pulls/{pr_number}")
