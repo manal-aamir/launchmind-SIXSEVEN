@@ -26,6 +26,7 @@ class EngineerAgent:
             revision_instruction=revision_instruction,
         ) if self.groq.enabled else {
             "html": "<!doctype html><html><body><h1>InvoiceHound</h1></body></html>",
+            "issue_title": "Build InvoiceHound landing page",
             "issue_body": "Initial landing page for InvoiceHound.",
             "pr_title": "Initial landing page",
             "pr_body": "Adds initial landing page.",
@@ -50,9 +51,12 @@ class EngineerAgent:
         repo_data = self.github_client.get_repo()
         base_branch = str(repo_data.get("default_branch", "main"))
 
-        # Assignment requires exact title: 'Initial landing page'
+        issue_title = str(assets.get("issue_title", "")).strip() or "Build InvoiceHound landing page"
+        # Keep issue title concise for GitHub UI readability.
+        if len(issue_title) > 120:
+            issue_title = issue_title[:117].rstrip() + "..."
         issue_body = str(assets.get("issue_body", "")) or f"Startup idea:\n{task.startup_idea}"
-        issue = self.github_client.create_issue("Initial landing page", issue_body)
+        issue = self.github_client.create_issue(issue_title, issue_body)
         output["issue_url"] = str(issue.get("html_url", ""))
 
         try:

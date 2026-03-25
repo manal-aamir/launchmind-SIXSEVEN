@@ -480,6 +480,7 @@ class GroqClient:
         """
         Engineer LLM output contract:
           - html: full working index.html (inline CSS)
+          - issue_title: concise GitHub issue title
           - issue_body: string (LLM-generated)
           - pr_title: string (LLM-generated)
           - pr_body: string (LLM-generated, markdown ok)
@@ -522,6 +523,7 @@ class GroqClient:
 
         mock = {
             "html": mock_html,
+            "issue_title": "Build InvoiceHound landing page from product spec",
             "issue_body": (
                 "Create the initial landing page for InvoiceHound.\n\n"
                 "Requirements:\n"
@@ -549,6 +551,7 @@ class GroqClient:
             "Generate a complete landing page and GitHub text.\n"
             "Return ONLY JSON with keys:\n"
             "- html: full working index.html (inline CSS)\n"
+            "- issue_title: concise and specific GitHub issue title\n"
             "- issue_body: issue description text (no title)\n"
             "- pr_title: pull request title\n"
             "- pr_body: pull request body (markdown)\n\n"
