@@ -67,7 +67,7 @@
 
   <h1>
     {% if pipeline.get('done') %}
-      ✅ Pipeline Complete
+      Pipeline Complete
     {% else %}
       <span class="spinner"></span> Pipeline Running…
     {% endif %}
@@ -84,11 +84,11 @@
     <div class="step-list">
 
       {% set steps = [
-        ('🧠', 'CEO Agent', 'Decomposes request → tasks', 'ceo'),
-        ('📋', 'Product Agent', 'Generates spec: personas, features, user stories', 'product'),
-        ('⚙️', 'Engineer Agent', 'Creates GitHub issue, branch, commits index.html, opens PR', 'engineer'),
-        ('📣', 'Marketing Agent', 'Sends cold email + posts Slack Block Kit to #launches', 'marketing'),
-        ('🔍', 'QA Agent', 'Reviews HTML + copy, posts 2 inline PR comments', 'qa'),
+        ('C', 'CEO Agent', 'Decomposes request → tasks', 'ceo'),
+        ('P', 'Product Agent', 'Generates spec: personas, features, user stories', 'product'),
+        ('E', 'Engineer Agent', 'Creates GitHub issue, branch, commits index.html, opens PR', 'engineer'),
+        ('M', 'Marketing Agent', 'Sends cold email + posts Slack Block Kit to #launches', 'marketing'),
+        ('Q', 'QA Agent', 'Reviews HTML + copy, posts 2 inline PR comments', 'qa'),
       ] %}
 
       {% for icon, name, desc, key in steps %}
