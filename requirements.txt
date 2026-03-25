@@ -3,3 +3,4 @@ sendgrid
 groq
 flask
 pyautogen
+redis

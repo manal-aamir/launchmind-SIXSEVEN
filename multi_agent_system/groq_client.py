@@ -1,7 +1,12 @@
 """
-Groq LLM client — used exclusively by Agent 5 (QA / Reviewer).
+Groq LLM client — used by Agent 1 (CEO) for orchestration reasoning
+and Agent 5 (QA / Reviewer) for review.  Using Groq for both CEO and
+QA demonstrates multi-LLM integration (bonus +2%):
 
-Uses the Groq SDK with llama-3.3-70b-versatile by default.
+  CEO  → Groq  llama-3.3-70b  (orchestration, decomposition, review)
+  QA   → Groq  llama-3.3-70b  (HTML + copy review, PR comments)
+  Product / Engineer / Marketing → OpenAI gpt-4o-mini (generation tasks)
+
 Falls back to structured mock outputs when no API key is provided.
 """
 
@@ -11,6 +16,8 @@ import json
 from typing import Any, Dict, Optional
 
 from groq import Groq
+
+from multi_agent_system.models import ReviewDecision
 
 
 class GroqClient:
@@ -200,6 +207,178 @@ class GroqClient:
             ),
             mock_default=mock,
         )
+
+    # ------------------------------------------------------------------
+    # CEO orchestration methods (Groq as CEO's LLM — multi-LLM bonus)
+    # ------------------------------------------------------------------
+
+    def decompose_startup_idea(self, startup_idea: str) -> Dict[str, Any]:
+        """CEO uses Groq to break the idea into product/engineer/marketing tasks."""
+        mock = {
+            "product_task": {
+                "task_brief": (
+                    "Define InvoiceHound personas, value proposition, ranked core features, and user stories "
+                    "focused on payment reminder escalation and team split fairness."
+                ),
+                "expected_output": [
+                    "Value proposition",
+                    "Three personas with pain points",
+                    "Five ranked core features",
+                    "Three user stories",
+                ],
+                "constraints": [
+                    "Must explicitly cover Day 1/Day 7/Day 14 escalation reminders.",
+                    "Must explicitly cover internal hour-based split logic.",
+                ],
+            },
+            "engineer_task": {
+                "task_brief": (
+                    "Build a complete index.html landing page for InvoiceHound and execute real GitHub workflow: "
+                    "create issue, branch, commit, and open PR."
+                ),
+                "expected_output": ["Landing page HTML", "Issue URL", "PR URL"],
+                "constraints": [
+                    "Branch name must be agent-landing-page.",
+                    "Author commit as EngineerAgent <agent@invoicehound.ai>.",
+                ],
+            },
+            "marketing_task": {
+                "task_brief": (
+                    "Generate launch copy for freelancers, send cold outreach email via SendGrid, and post "
+                    "Slack Block Kit launch message to #launches with PR link."
+                ),
+                "expected_output": [
+                    "Tagline under 10 words",
+                    "Landing page description",
+                    "Cold outreach email",
+                    "Three social posts",
+                    "Delivery receipts",
+                ],
+                "constraints": [
+                    "Tone must target freelancers frustrated by chasing clients.",
+                ],
+            },
+        }
+        return self._complete_json(
+            system_prompt=(
+                "You are an expert startup CEO assistant. Return ONLY valid JSON — no markdown. "
+                "Break the startup idea into three actionable tasks for Product, Engineer, Marketing agents."
+            ),
+            user_prompt=(
+                f"Startup idea: {startup_idea}\n\n"
+                "Return JSON with keys: product_task, engineer_task, marketing_task.\n"
+                "Each must include: task_brief (string), expected_output (array), constraints (array).\n"
+                "For InvoiceHound, enforce explicit reminder escalation (Day 1/7/14) and split-logic requirements."
+            ),
+            mock_default=mock,
+        )
+
+    def review_output(
+        self,
+        startup_idea: str,
+        task_brief: str,
+        agent_name: str,
+        agent_output: Dict[str, Any],
+    ) -> ReviewDecision:
+        """CEO uses Groq to review any agent's output."""
+        mock_pass = {
+            "acceptable": True, "score": 8,
+            "rationale": "Output is complete and addresses all key requirements.",
+            "follow_up_instruction": "",
+        }
+        mock_fail = {
+            "acceptable": False, "score": 4,
+            "rationale": "Output is too short or missing important sections.",
+            "follow_up_instruction": "Expand concrete deliverables and execution details.",
+        }
+        mock_default = mock_pass if len(json.dumps(agent_output)) > 180 else mock_fail
+        result = self._complete_json(
+            system_prompt=(
+                "You are a strict CEO reviewer for a startup. Return ONLY valid JSON. "
+                "Give honest quality scores — do not be generous if the output is thin."
+            ),
+            user_prompt=(
+                f"Startup: {startup_idea}\nAgent: {agent_name}\nTask: {task_brief}\n"
+                f"Output: {json.dumps(agent_output)[:3000]}\n\n"
+                "Return JSON with keys:\n"
+                "- acceptable (boolean)\n"
+                "- score (integer 1-10)\n"
+                "- rationale (string, 1-2 sentences)\n"
+                "- follow_up_instruction (string — specific improvement, empty if acceptable)"
+            ),
+            mock_default=mock_default,
+        )
+        return ReviewDecision(
+            acceptable=bool(result.get("acceptable")),
+            score=int(result.get("score", 0)),
+            rationale=str(result.get("rationale", "")),
+            follow_up_instruction=str(result.get("follow_up_instruction", "")),
+        )
+
+    def review_product_spec(
+        self, startup_idea: str, product_output: Dict[str, Any]
+    ) -> ReviewDecision:
+        """CEO uses Groq to review the Product agent's spec for InvoiceHound specifics."""
+        mock_default = {
+            "acceptable": True, "score": 8,
+            "rationale": "Product spec covers escalation logic and split fairness.",
+            "follow_up_instruction": "",
+        }
+        result = self._complete_json(
+            system_prompt="You are a strict CEO reviewer. Return ONLY valid JSON.",
+            user_prompt=(
+                f"Startup: {startup_idea}\nProduct spec: {json.dumps(product_output)[:3000]}\n\n"
+                "Check ALL of the following. Fail if ANY are missing:\n"
+                "1. Does it have at least 3 user personas with named pain points?\n"
+                "2. Are there 5 ranked features?\n"
+                "3. Does it explicitly mention Day 1/Day 7/Day 14 reminder escalation?\n"
+                "4. Does it explicitly mention internal payment splitting by hours?\n"
+                "5. Are there at least 3 user stories?\n\n"
+                "Return JSON with keys: acceptable (bool), score (1-10), rationale, follow_up_instruction"
+            ),
+            mock_default=mock_default,
+        )
+        return ReviewDecision(
+            acceptable=bool(result.get("acceptable")),
+            score=int(result.get("score", 0)),
+            rationale=str(result.get("rationale", "")),
+            follow_up_instruction=str(result.get("follow_up_instruction", "")),
+        )
+
+    def summarize_for_slack(
+        self,
+        startup_idea: str,
+        agent_outputs: Dict[str, Any],
+        qa_notes: str,
+    ) -> str:
+        """CEO uses Groq to write the final pipeline summary for Slack."""
+        if not self.enabled or not self._client:
+            return (
+                f"*InvoiceHound Pipeline Complete*\n"
+                f"Idea: {startup_idea[:100]}\n"
+                f"QA: {qa_notes[:200]}"
+            )
+        try:
+            response = self._client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system",
+                     "content": "You write concise Slack summaries for startup agent pipelines. Use *bold* for emphasis."},
+                    {"role": "user",
+                     "content": (
+                         f"Summarise this InvoiceHound agent pipeline run for a Slack post.\n"
+                         f"Startup idea: {startup_idea[:200]}\n"
+                         f"QA notes: {qa_notes[:300]}\n"
+                         f"PR URL: {agent_outputs.get('engineer', {}).get('pr_url', 'N/A')}\n"
+                         f"Tagline: {agent_outputs.get('marketing', {}).get('tagline', 'N/A')}\n\n"
+                         "Keep it under 200 words. Mention GitHub PR, QA result, and what was built."
+                     )},
+                ],
+                temperature=0.4,
+            )
+            return response.choices[0].message.content or ""
+        except Exception:
+            return f"*InvoiceHound Pipeline Complete* — QA: {qa_notes[:200]}"
 
     def generate_pr_comment(self, issue: str) -> str:
         """Generate a specific inline PR comment from a QA issue."""

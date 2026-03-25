@@ -29,6 +29,7 @@ from multi_agent_system.integrations.sendgrid_client import SendGridClient
 from multi_agent_system.integrations.slack_client import SlackClient
 from multi_agent_system.invoice_engine import InvoiceEngine, LineItem, TeamMember
 from multi_agent_system.llm_client import LLMClient
+from multi_agent_system.redis_bus import RedisBus
 from multi_agent_system.reminder_engine import ReminderEngine
 
 # ---------------------------------------------------------------------------
@@ -64,6 +65,11 @@ github_client = GitHubClient(
 llm_client = LLMClient(
     api_key=env.get("OPENAI_API_KEY", ""),
     model=env.get("OPENAI_MODEL", "gpt-4o-mini"),
+)
+
+redis_bus = RedisBus(
+    host=env.get("REDIS_HOST", "localhost"),
+    port=int(env.get("REDIS_PORT", "6379")),
 )
 
 invoice_engine = InvoiceEngine()

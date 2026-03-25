@@ -22,6 +22,7 @@ from multi_agent_system.integrations.github_client import GitHubClient
 from multi_agent_system.integrations.sendgrid_client import SendGridClient
 from multi_agent_system.integrations.slack_client import SlackClient
 from multi_agent_system.llm_client import LLMClient
+from multi_agent_system.redis_bus import RedisBus
 
 
 def load_config(project_root: Path) -> dict:
@@ -74,6 +75,13 @@ def main() -> None:
     )
     slack_client = SlackClient(bot_token=env.get("SLACK_BOT_TOKEN", ""))
 
+    # Redis pub/sub bus (falls back to in-memory if Redis is not running)
+    redis_bus = RedisBus(
+        host=env.get("REDIS_HOST", "localhost"),
+        port=int(env.get("REDIS_PORT", "6379")),
+    )
+    print(f"Message bus  : {'Redis pub/sub' if redis_bus.is_redis else 'in-memory (Redis unavailable)'}")
+
     ceo = CEOAgent(
         llm=llm,
         groq_client=groq_client,
@@ -89,17 +97,28 @@ def main() -> None:
 
     result = ceo.run(startup_idea=startup_idea, dry_run=dry_run)
 
-    print("=== CEO ORCHESTRATION COMPLETE ===")
-    print("QA passed    :", result["qa"]["passed"])
-    print("Decision log :", result["decision_log_path"])
-    print("Slack posted :", bool(result["slack_response"].get("ok")))
-    print()
-    print("Final summary:")
+    print("\n=== CEO ORCHESTRATION COMPLETE ===")
+    print(f"QA passed    : {result['qa']['passed']}")
+    print(f"Decision log : {result['decision_log_path']}")
+    print(f"Message log  : {result.get('message_log_path', 'N/A')}")
+    print(f"Slack posted : {bool(result['slack_response'].get('ok'))}")
+    if result.get("failures"):
+        print(f"Failures     : {len(result['failures'])} (gracefully handled — see logs)")
+
+    print("\nFinal summary:")
     print(result["final_summary_text"])
-    print()
-    print("Task messages sent to each agent:")
+
+    print("\n--- CEO Message History ---")
+    ceo_msgs = result.get("ceo_messages", [])
+    print(f"Total CEO messages: {len(ceo_msgs)}")
+    for m in ceo_msgs:
+        direction = "→" if m["from_agent"] == "ceo" else "←"
+        other = m["to_agent"] if m["from_agent"] == "ceo" else m["from_agent"]
+        print(f"  [{m['timestamp']}] {direction} {other:12s}  [{m['message_type']:20s}]  {m['message_id']}")
+
+    print("\nTask messages sent to each agent:")
     for agent, msg in result["task_messages"].items():
-        print(f"  [{agent.upper()}] {msg['task_brief'][:90]}")
+        print(f"  [{agent.upper():10s}] {msg['task_brief'][:90]}")
 
 
 if __name__ == "__main__":
