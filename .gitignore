@@ -1,4 +1,10 @@
 .env
+invoice_store/*.json
+earnings_*.html
+invoice_*.html
+*.mov
+__pycache__/
+.DS_Store
 github-api.png
 testing-gtihubAPI.png
 testing-githubAPI.png
