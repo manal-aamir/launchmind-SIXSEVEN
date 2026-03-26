@@ -50,7 +50,7 @@ class InvoiceRecord:
     due_date: str
     line_items: List[LineItem]
     team_members: List[TeamMember]
-    currency: str = "USD"
+    currency: str = "PKR"
     paid: bool = False
     payment_splits: dict = field(default_factory=dict)
 
@@ -90,7 +90,7 @@ class InvoiceEngine:
         team_members: List[TeamMember],
         line_items: List[LineItem],
         days_until_due: int = 14,
-        currency: str = "USD",
+        currency: str = "PKR",
     ) -> InvoiceRecord:
         today = date.today()
         invoice = InvoiceRecord(
@@ -107,24 +107,43 @@ class InvoiceEngine:
         invoice.calculate_splits()
         return invoice
 
-    def generate_html(self, inv: InvoiceRecord, include_internal_split: bool = False) -> str:
+    def generate_html(
+        self,
+        inv: InvoiceRecord,
+        include_internal_split: bool = False,
+        show_status_banner: bool = True,
+    ) -> str:
         subtotal = inv.total_amount
         gst      = round(subtotal * 0.10, 2)
         total    = round(subtotal + gst, 2)
         status_color = "#16a34a" if inv.paid else "#dc2626"
         status_label = "PAID"    if inv.paid else "UNPAID"
 
+        # Derive days_until_due for professional footer text
+        try:
+            from datetime import date as _date
+            issue = _date.fromisoformat(inv.issue_date)
+            due   = _date.fromisoformat(inv.due_date)
+            days_until_due = (due - issue).days
+        except Exception:
+            days_until_due = 14
+
+        # Sender name: first team member (team lead) or project name
+        sender_name = inv.team_members[0].name if inv.team_members else inv.project_name
+
         item_rows = ""
         for idx, item in enumerate(inv.line_items, 1):
             bg = "#ffffff" if idx % 2 else "#f9fafb"
+            qty_display = "-" if item.quantity == 1 else (
+                int(item.quantity) if item.quantity == int(item.quantity) else item.quantity
+            )
             item_rows += f"""
             <tr style="background:{bg}">
               <td style="text-align:center;border:1px solid #d1d5db;padding:9px 8px">{idx}</td>
               <td style="border:1px solid #d1d5db;padding:9px 12px">{item.description}</td>
-              <td style="text-align:center;border:1px solid #d1d5db;padding:9px 8px">Ea</td>
-              <td style="text-align:center;border:1px solid #d1d5db;padding:9px 8px">{int(item.quantity) if item.quantity == int(item.quantity) else item.quantity}</td>
-              <td style="text-align:right;border:1px solid #d1d5db;padding:9px 12px">${item.unit_price:,.2f}</td>
-              <td style="text-align:right;border:1px solid #d1d5db;padding:9px 12px;font-weight:600">${item.total:,.2f}</td>
+              <td style="text-align:center;border:1px solid #d1d5db;padding:9px 8px">{qty_display}</td>
+              <td style="text-align:right;border:1px solid #d1d5db;padding:9px 12px">Rs {item.unit_price:,.2f}</td>
+              <td style="text-align:right;border:1px solid #d1d5db;padding:9px 12px;font-weight:600">Rs {item.total:,.2f}</td>
             </tr>"""
 
         split_rows = ""
@@ -135,7 +154,7 @@ class InvoiceEngine:
               <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;color:#6b7280">{data['role']}</td>
               <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:center">{data['hours']}h</td>
               <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:center">{data['percentage']}%</td>
-              <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:right;color:#16a34a;font-weight:700">${data['amount']:,.2f}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:right;color:#16a34a;font-weight:700">Rs {data['amount']:,.2f}</td>
             </tr>"""
 
         internal_split_html = (
@@ -145,6 +164,11 @@ class InvoiceEngine:
             + split_rows
             + '</tbody></table></div>'
         ) if (include_internal_split and inv.payment_splits) else ""
+
+        status_banner_html = (
+            f'<div class="status-bar">{status_label}</div>'
+            if show_status_banner else ""
+        )
 
         return f"""<!doctype html>
 <html lang="en">
@@ -158,6 +182,9 @@ class InvoiceEngine:
             background: #f3f4f6; padding: 32px 16px; }}
     .page {{ max-width: 860px; margin: 0 auto; background: #ffffff;
              box-shadow: 0 4px 24px rgba(0,0,0,.12); }}
+
+    /* ── Brand accent bar ── */
+    .accent-bar {{ height: 4px; background: #1a6b3c; }}
 
     /* ── Header ── */
     .header {{ display: flex; justify-content: space-between; align-items: flex-start;
@@ -229,6 +256,9 @@ class InvoiceEngine:
 <body>
 <div class="page">
 
+  <!-- Brand accent bar -->
+  <div class="accent-bar"></div>
+
   <!-- Header -->
   <div class="header">
     <div class="brand">
@@ -254,8 +284,8 @@ class InvoiceEngine:
     </div>
   </div>
 
-  <!-- Status bar -->
-  <div class="status-bar">{status_label}</div>
+  <!-- Status bar (dashboard only, not shown on client PDF) -->
+  {status_banner_html}
 
   <!-- Parties -->
   <div class="parties">
@@ -263,16 +293,15 @@ class InvoiceEngine:
       <div class="party-label">Bill To</div>
       <div class="party-name">{inv.client_name}</div>
       <div class="party-detail">
-        📧 {inv.client_email}<br>
+        {inv.client_email}<br>
         Payment due: <strong>{inv.due_date}</strong>
       </div>
     </div>
     <div class="party">
       <div class="party-label">From</div>
-      <div class="party-name">InvoiceHound — {inv.project_name[:40]}</div>
+      <div class="party-name">{sender_name}</div>
       <div class="party-detail">
-        Issued: {inv.issue_date}<br>
-        Currency: {inv.currency}
+        Issued: {inv.issue_date}
       </div>
     </div>
   </div>
@@ -285,23 +314,22 @@ class InvoiceEngine:
         <tr>
           <th class="num" style="width:52px">Item No.</th>
           <th>Item Description</th>
-          <th class="num" style="width:52px">Unit</th>
-          <th class="num" style="width:52px">Qty</th>
-          <th style="text-align:right;width:130px">Unit Price ({inv.currency})</th>
+          <th class="num" style="width:52px">Quantity</th>
+          <th style="text-align:right;width:130px">Unit Price (Rs)</th>
           <th style="text-align:right;width:110px">Item Total</th>
         </tr>
       </thead>
       <tbody>{item_rows}</tbody>
       <tfoot>
         <tr>
-          <td colspan="4" style="border-color:transparent"></td>
-          <td style="text-align:right;color:#6b7280">Total (Excl GST)</td>
-          <td style="text-align:right;font-weight:600">${subtotal:,.2f}</td>
+          <td colspan="3" style="border-color:transparent"></td>
+          <td style="text-align:right;color:#6b7280">Subtotal</td>
+          <td style="text-align:right;font-weight:600">Rs {subtotal:,.2f}</td>
         </tr>
         <tr>
-          <td colspan="4" style="border-color:transparent"></td>
+          <td colspan="3" style="border-color:transparent"></td>
           <td style="text-align:right;color:#6b7280">GST (10%)</td>
-          <td style="text-align:right">${gst:,.2f}</td>
+          <td style="text-align:right">Rs {gst:,.2f}</td>
         </tr>
       </tfoot>
     </table>
@@ -311,8 +339,8 @@ class InvoiceEngine:
   <div class="totals">
     <div class="totals-box">
       <div class="totals-row grand">
-        <span>Total ({inv.currency})</span>
-        <span>${total:,.2f}</span>
+        <span>Total Due</span>
+        <span>Rs {total:,.2f}</span>
       </div>
     </div>
   </div>
@@ -322,8 +350,8 @@ class InvoiceEngine:
 
   <!-- Footer -->
   <div class="footer">
-    <span>Generated by <strong>InvoiceHound</strong> — automated invoicing for freelance teams</span>
-    <span>Late payments trigger automatic reminders (Day 1 → Day 7 → Day 14)</span>
+    <span>Thank you for your business.</span>
+    <span>Payment is due within {days_until_due} days of invoice date.</span>
   </div>
 
 </div>

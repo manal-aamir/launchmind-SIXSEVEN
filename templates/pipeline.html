@@ -2,285 +2,315 @@
 {% block title %}— Pipeline{% endblock %}
 {% block content %}
 <style>
-    .container { max-width: 720px; margin: 0 auto; padding: 12px 0 0; }
-    h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
-    .subtitle { color: #64748b; font-size: 15px; margin-bottom: 40px; }
-    .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px;
-            padding: 28px; margin-bottom: 20px; }
-    .card h3 { font-size: 15px; color: #94a3b8; text-transform: uppercase;
-               letter-spacing: .5px; margin-bottom: 18px; font-weight: 600; }
-
-    /* ── Agent steps ── */
-    .step-list { display: flex; flex-direction: column; gap: 0; }
-    .step-row {
-      display: flex; align-items: center; gap: 14px; padding: 13px 0;
-      border-bottom: 1px solid #0f172a;
-    }
-    .step-row:last-child { border-bottom: none; }
-    .step-icon { font-size: 20px; width: 32px; text-align: center; flex-shrink: 0; }
-    .step-info { flex: 1; }
-    .step-info strong { display: block; font-size: 14px; color: #f1f5f9; }
-    .step-info span   { font-size: 12px; color: #64748b; }
-    .status-badge {
-      font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 12px;
-      text-transform: uppercase; letter-spacing: .4px; white-space: nowrap;
-    }
-    .s-done    { background: #14532d; color: #86efac; }
-    .s-running { background: #1e3a5f; color: #93c5fd; }
-    .s-wait    { background: #1e293b; color: #475569; border: 1px solid #334155; }
-
-    /* ── Result links ── */
-    .result-row { display: flex; align-items: center; justify-content: space-between;
-                  padding: 12px 0; border-bottom: 1px solid #0f172a; font-size: 14px; }
-    .result-row:last-child { border-bottom: none; }
-    .result-row span { color: #94a3b8; }
-    .result-row a { color: #22c55e; text-decoration: none; font-weight: 600; font-size: 13px; }
-    .result-row a:hover { text-decoration: underline; }
-    .result-row .na { color: #475569; font-size: 13px; }
-
-    /* ── Spinner ── */
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .spinner {
-      display: inline-block; width: 14px; height: 14px; border: 2px solid #334155;
-      border-top-color: #3b82f6; border-radius: 50%; animation: spin .7s linear infinite;
-      vertical-align: middle; margin-right: 6px;
-    }
-
-    /* ── Buttons ── */
-    .btn { display: inline-block; padding: 10px 20px; border-radius: 8px; font-size: 14px;
-           font-weight: 600; cursor: pointer; border: none; text-decoration: none; }
-    .btn-green  { background: #22c55e; color: #052e16; }
-    .btn-blue   { background: #3b82f6; color: #fff; }
-    .btn-gray   { background: #334155; color: #e2e8f0; }
-    .btn:hover { opacity: .88; }
-    .actions { display: flex; gap: 12px; margin-top: 24px; flex-wrap: wrap; }
-
-    /* ── QA comments ── */
-    .comment-box {
-      background: #0f172a; border: 1px solid #334155; border-radius: 8px;
-      padding: 12px 14px; margin-top: 8px; font-size: 13px; color: #cbd5e1;
-      font-style: italic; border-left: 3px solid #3b82f6;
-    }
-  </style>
+  .container { max-width: 1100px; margin: 0 auto; padding: 12px 0 0; }
+  h1 { font-size: 30px; margin: 0 0 8px; }
+  .subtitle { color: #94a3b8; font-size: 14px; margin-bottom: 20px; }
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .card h3 { margin: 0 0 14px; color: #e2e8f0; font-size: 16px; }
+  .status-chip { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .4px; }
+  .running { background: #1e3a5f; color: #93c5fd; }
+  .complete { background: #14532d; color: #86efac; }
+  .error { background: #450a0a; color: #fca5a5; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .json-box { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 10px; color: #cbd5e1; font-size: 12px; overflow: auto; }
+  details > summary { cursor: pointer; list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: "▶ "; }
+  details[open] > summary::before { content: "▼ "; }
+  .label { color: #94a3b8; font-size: 12px; margin-bottom: 6px; display: block; }
+  .quote { border-left: 4px solid #22c55e; background: #0f172a; padding: 12px; border-radius: 8px; color: #e2e8f0; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border: 1px solid #334155; padding: 8px; text-align: left; vertical-align: top; }
+  th { background: #0f172a; color: #cbd5e1; }
+  td { color: #94a3b8; }
+  .pill-pass { color: #86efac; font-weight: 700; }
+  .pill-fail { color: #fca5a5; font-weight: 700; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .box { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px; }
+  .tagline { font-size: 22px; color: #22c55e; font-weight: 800; }
+  .email-preview { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px; }
+  .timeline-item { border-left: 2px solid #334155; padding: 8px 10px 8px 12px; margin: 10px 0; }
+  .feed-item { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 10px; margin: 8px 0; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .btn { display: inline-block; text-decoration: none; padding: 8px 12px; border-radius: 8px; background: #334155; color: #e2e8f0; font-size: 13px; }
+  .btn:hover { opacity: .9; }
+</style>
 
 <div class="container">
-
-  <h1>
-    {% if pipeline.get('done') %}
-      Pipeline Complete
-    {% else %}
-      <span class="spinner"></span> Pipeline Running…
-    {% endif %}
-  </h1>
+  <h1>Pipeline Debug View</h1>
   <p class="subtitle">
     Build request: <strong style="color:#f1f5f9">{{ pipeline.project_name }}</strong>
     &nbsp;·&nbsp; Client: <strong style="color:#f1f5f9">{{ pipeline.client_name }}</strong>
     &nbsp;·&nbsp; Invoice: <code style="color:#94a3b8">{{ pipeline.invoice_id }}</code>
+    &nbsp;·&nbsp;
+    {% if pipeline.pipeline_status == "running" %}
+      <span class="status-chip running">RUNNING</span>
+    {% elif pipeline.pipeline_status == "error" %}
+      <span class="status-chip error">ERROR</span>
+    {% else %}
+      <span class="status-chip complete">COMPLETE</span>
+    {% endif %}
   </p>
+
   {% if pipeline.get('project_description') %}
-  <p style="margin-top:-28px;margin-bottom:20px;color:#94a3b8;font-size:13px">
+  <p style="margin-top:-8px;margin-bottom:18px;color:#94a3b8;font-size:13px">
     Description: {{ pipeline.project_description }}
   </p>
   {% endif %}
 
-  <!-- ── Agent steps ── -->
+  <!-- 1. CEO DECOMPOSITION -->
   <div class="card">
-    <h3>Agent Pipeline</h3>
-    <div class="step-list">
-
-      {% set steps = [
-        ('C', 'CEO Agent', 'Decomposes request → tasks', 'ceo'),
-        ('P', 'Product Agent', 'Generates spec: personas, features, user stories', 'product'),
-        ('E', 'Engineer Agent', 'Creates GitHub issue, branch, commits index.html, opens PR', 'engineer'),
-        ('M', 'Marketing Agent', 'Sends cold email + posts Slack Block Kit to #launches', 'marketing'),
-        ('Q', 'QA Agent', 'Reviews HTML + copy, posts 2 inline PR comments', 'qa'),
-      ] %}
-
-      {% for icon, name, desc, key in steps %}
-      {% set done = pipeline.get('agent_done', {}).get(key, False) %}
-      {% set active = pipeline.get('agent_active') == key %}
-      <div class="step-row">
-        <div class="step-icon">{{ icon }}</div>
-        <div class="step-info">
-          <strong>{{ name }}</strong>
-          <span>{{ desc }}</span>
-        </div>
-        {% if done %}
-          <span class="status-badge s-done">✓ Done</span>
-        {% elif active %}
-          <span class="status-badge s-running"><span class="spinner"></span>Running</span>
-        {% else %}
-          <span class="status-badge s-wait">Waiting</span>
-        {% endif %}
+    <h3>CEO Task Decomposition</h3>
+    <span class="label">Raw JSON task briefs sent by CEO</span>
+    <div class="grid-2">
+      <div class="box">
+        <span class="label mono">product_task.task_brief</span>
+        <div class="json-box">{{ pipeline.ceo_task_decomposition.product_task.task_brief or 'Pending...' }}</div>
       </div>
-      {% endfor %}
-
+      <div class="box">
+        <span class="label mono">engineer_task.task_brief</span>
+        <div class="json-box">{{ pipeline.ceo_task_decomposition.engineer_task.task_brief or 'Pending...' }}</div>
+      </div>
+      <div class="box" style="grid-column: 1 / -1;">
+        <span class="label mono">marketing_task.task_brief</span>
+        <div class="json-box">{{ pipeline.ceo_task_decomposition.marketing_task.task_brief or 'Pending...' }}</div>
+      </div>
     </div>
   </div>
 
-  {% if pipeline.get('task_messages') %}
+  <!-- 2. PRODUCT AGENT -->
   <div class="card">
-    <h3>Agent Inputs (From CEO)</h3>
-    {% for name, msg in pipeline.task_messages.items() %}
-      <details style="margin-bottom:10px">
-        <summary style="cursor:pointer;color:#cbd5e1;font-size:13px">{{ name|upper }} task brief</summary>
-        <div style="margin-top:8px;font-size:12px;color:#94a3b8;line-height:1.6">
-          <div><strong style="color:#e2e8f0">Brief:</strong> {{ msg.task_brief }}</div>
-          <div><strong style="color:#e2e8f0">Expected:</strong> {{ msg.expected_output }}</div>
-          <div><strong style="color:#e2e8f0">Constraints:</strong> {{ msg.constraints }}</div>
-        </div>
-      </details>
-    {% endfor %}
-  </div>
-  {% endif %}
-
-  <!-- ── Results ── -->
-  <div class="card">
-    <h3>Results</h3>
-    <div>
-
-      <div class="result-row">
-        <span>GitHub Issue</span>
-        {% if pipeline.get('issue_url') %}
-          <a href="{{ pipeline.issue_url }}" target="_blank">{{ pipeline.issue_url }}</a>
-        {% else %}
-          <span class="na">Pending…</span>
-        {% endif %}
-      </div>
-
-      <div class="result-row">
-        <span>GitHub PR</span>
-        {% if pipeline.get('pr_url') %}
-          <a href="{{ pipeline.pr_url }}" target="_blank">{{ pipeline.pr_url }}</a>
-        {% else %}
-          <span class="na">Pending…</span>
-        {% endif %}
-      </div>
-
-      <div class="result-row">
-        <span>Marketing Email</span>
-        {% if pipeline.get('email_sent') %}
-          <span class="status-badge s-done">✓ Sent</span>
-        {% else %}
-          <span class="na">Pending…</span>
-        {% endif %}
-      </div>
-
-      <div class="result-row">
-        <span>Slack Launch Post</span>
-        {% if pipeline.get('slack_ok') %}
-          <span class="status-badge s-done">✓ Posted</span>
-        {% else %}
-          <span class="na">Pending…</span>
-        {% endif %}
-      </div>
-
-      <div class="result-row">
-        <span>QA Verdict</span>
-        {% if pipeline.get('qa_passed') is not none %}
-          {% if pipeline.qa_passed %}
-            <span class="status-badge s-done">✓ Passed</span>
+    <h3>Product Agent Output</h3>
+    {% set product = pipeline.get('product_spec', {}) %}
+    <div class="box">
+      <span class="label">value_proposition</span>
+      <div class="quote">{{ product.get('value_proposition', 'Pending...') }}</div>
+    </div>
+    <div style="margin-top:12px" class="box">
+      <span class="label">personas</span>
+      <table>
+        <thead><tr><th>Name</th><th>Role</th><th>Pain Point</th></tr></thead>
+        <tbody>
+          {% for p in product.get('personas', []) %}
+            <tr>
+              <td>{{ p.get('name', '') }}</td>
+              <td>{{ p.get('role', '') }}</td>
+              <td>{{ p.get('pain_point', '') }}</td>
+            </tr>
           {% else %}
-            <span class="status-badge" style="background:#450a0a;color:#fca5a5">✗ Failed</span>
-          {% endif %}
-        {% else %}
-          <span class="na">Pending…</span>
-        {% endif %}
-      </div>
-
-      <div class="result-row">
-        <span>CEO Slack Summary</span>
-        {% if pipeline.get('slack_summary_ok') %}
-          <span class="status-badge s-done">✓ Posted</span>
-        {% else %}
-          <span class="na">Pending…</span>
-        {% endif %}
-      </div>
-
+            <tr><td colspan="3">Pending...</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-
-    <!-- QA Comments -->
-    {% if pipeline.get('qa_comments') %}
-    <div style="margin-top:18px">
-      <div style="font-size:13px;color:#64748b;margin-bottom:8px">QA Inline PR Comments</div>
-      {% for c in pipeline.qa_comments %}
-        <div class="comment-box">"{{ c }}"</div>
-      {% endfor %}
+    <div style="margin-top:12px" class="box">
+      <span class="label">features</span>
+      <ol style="margin:0;padding-left:18px;color:#94a3b8;font-size:13px">
+        {% for f in product.get('features', product.get('core_features_ranked', [])) %}
+          <li style="margin-bottom:6px">
+            <strong style="color:#e2e8f0">Priority {{ f.get('priority', '') }}</strong>
+            — {{ f.get('name', '') }}: {{ f.get('description', '') }}
+          </li>
+        {% else %}
+          <li>Pending...</li>
+        {% endfor %}
+      </ol>
     </div>
-    {% endif %}
-
-    {% if pipeline.get('agent_error') %}
-      <div style="margin-top:14px;padding:12px 14px;background:#450a0a;border-radius:8px;font-size:13px;color:#fca5a5">
-        Error: {{ pipeline.agent_error }}
-      </div>
-    {% endif %}
+    <div style="margin-top:12px" class="box">
+      <span class="label">user_stories</span>
+      <ul style="margin:0;padding-left:18px;color:#94a3b8;font-size:13px">
+        {% for s in product.get('user_stories', []) %}
+          <li style="margin-bottom:5px">{{ s }}</li>
+        {% else %}
+          <li>Pending...</li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div style="margin-top:12px" class="box">
+      <span class="label">confirmation_message</span>
+      <div class="json-box">{{ product.get('confirmation_message', 'Pending...') }}</div>
+    </div>
   </div>
 
-  {% if pipeline.get('marketing_copy') %}
+  <!-- 3. ENGINEER AGENT -->
   <div class="card">
-    <h3>Marketing Output (LLM Generated)</h3>
-    <div style="font-size:13px;color:#94a3b8;line-height:1.7">
-      <div><strong style="color:#e2e8f0">Tagline:</strong> {{ pipeline.marketing_copy.tagline }}</div>
-      <div><strong style="color:#e2e8f0">Landing Description:</strong> {{ pipeline.marketing_copy.landing_description }}</div>
-      <div><strong style="color:#e2e8f0">Cold Email Subject:</strong> {{ pipeline.marketing_copy.cold_email.subject }}</div>
-      <div><strong style="color:#e2e8f0">Cold Email Body:</strong> {{ pipeline.marketing_copy.cold_email.body }}</div>
-      <div><strong style="color:#e2e8f0">Test Email Recipient:</strong> {{ pipeline.get('marketing_recipient', 'N/A') }}</div>
-      <div style="margin-top:8px"><strong style="color:#e2e8f0">Social Posts:</strong></div>
-      <ul style="margin-left:18px">
-        <li>Twitter/X: {{ pipeline.marketing_copy.social_posts.twitter }}</li>
-        <li>LinkedIn: {{ pipeline.marketing_copy.social_posts.linkedin }}</li>
-        <li>Instagram: {{ pipeline.marketing_copy.social_posts.instagram }}</li>
+    <h3>Engineer Agent Output</h3>
+    <div class="grid-2">
+      <div class="box">
+        <span class="label">GitHub Issue URL</span>
+        {% if pipeline.engineer_debug.issue_url %}
+          <a href="{{ pipeline.engineer_debug.issue_url }}" target="_blank">{{ pipeline.engineer_debug.issue_url }}</a>
+        {% else %}Pending...{% endif %}
+      </div>
+      <div class="box">
+        <span class="label">GitHub PR URL</span>
+        {% if pipeline.engineer_debug.pr_url %}
+          <a href="{{ pipeline.engineer_debug.pr_url }}" target="_blank">{{ pipeline.engineer_debug.pr_url }}</a>
+        {% else %}Pending...{% endif %}
+      </div>
+      <div class="box" style="grid-column:1/-1">
+        <span class="label">Branch name</span>
+        <div class="json-box mono">{{ pipeline.engineer_debug.branch_name or 'Pending...' }}</div>
+      </div>
+      <div class="box" style="grid-column:1/-1">
+        <details>
+          <summary style="color:#cbd5e1">Generated HTML preview (first 500 chars)</summary>
+          <pre class="json-box" style="margin-top:8px">{{ pipeline.engineer_debug.html_preview or 'Pending...' }}</pre>
+        </details>
+      </div>
+      <div class="box" style="grid-column:1/-1">
+        <details>
+          <summary style="color:#cbd5e1">Preview landing page (rendered)</summary>
+          <iframe
+            srcdoc="{{ (pipeline.get('landing_html','') or '') | e }}"
+            style="width:100%; height:600px; border:1px solid #333;
+                   border-radius:8px; margin-top:12px; background:#ffffff;"
+            sandbox="allow-scripts">
+          </iframe>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. MARKETING AGENT -->
+  <div class="card">
+    <h3>Marketing Agent Output</h3>
+    {% set mkt = pipeline.get('marketing_copy', {}) %}
+    <div class="box">
+      <span class="label">tagline</span>
+      <div class="tagline">{{ mkt.get('tagline', 'Pending...') }}</div>
+    </div>
+    <div style="margin-top:10px" class="box">
+      <span class="label">landing_description</span>
+      <div style="color:#cbd5e1">{{ mkt.get('landing_description', 'Pending...') }}</div>
+    </div>
+    <div style="margin-top:10px" class="email-preview">
+      <span class="label">cold_email preview</span>
+      <div><strong style="color:#e2e8f0">Subject:</strong> {{ (mkt.get('cold_email', {})).get('subject', 'Pending...') }}</div>
+      <pre class="json-box" style="margin-top:8px;white-space:pre-wrap">{{ (mkt.get('cold_email', {})).get('body', 'Pending...') }}</pre>
+    </div>
+    <div style="margin-top:10px" class="grid-2">
+      <div class="box">
+        <span class="label">Twitter</span>
+        <div style="color:#cbd5e1;white-space:pre-wrap">{{ (mkt.get('social_posts', {})).get('twitter', 'Pending...') }}</div>
+      </div>
+      <div class="box">
+        <span class="label">LinkedIn</span>
+        <div style="color:#cbd5e1;white-space:pre-wrap">{{ (mkt.get('social_posts', {})).get('linkedin', 'Pending...') }}</div>
+      </div>
+      <div class="box" style="grid-column:1/-1">
+        <span class="label">Instagram</span>
+        <div style="color:#cbd5e1;white-space:pre-wrap">{{ (mkt.get('social_posts', {})).get('instagram', 'Pending...') }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. QA AGENT -->
+  <div class="card">
+    <h3>QA Agent Report</h3>
+    {% set qa = pipeline.get('qa_debug', {}) %}
+    <div class="box">
+      <span class="label">verdict</span>
+      {% if qa.get('verdict') == 'PASS' %}
+        <div class="pill-pass">PASS</div>
+      {% else %}
+        <div class="pill-fail">FAIL</div>
+      {% endif %}
+    </div>
+    <div style="margin-top:10px" class="box">
+      <span class="label">issues</span>
+      <ul style="margin:0;padding-left:18px;color:#94a3b8;font-size:13px">
+        {% for issue in qa.get('issues', []) %}
+          <li>{{ issue }}</li>
+        {% else %}
+          <li>No issues.</li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div style="margin-top:10px" class="box">
+      <span class="label">comments</span>
+      <ul style="margin:0;padding-left:18px;color:#94a3b8;font-size:13px">
+        {% for c in qa.get('comments', []) %}
+          <li>{{ c }}</li>
+        {% else %}
+          <li>No comments yet.</li>
+        {% endfor %}
       </ul>
     </div>
   </div>
-  {% endif %}
 
-  {% if pipeline.get('landing_html') %}
+  <!-- 6. CEO REVIEW DECISIONS -->
   <div class="card">
-    <h3>Generated Landing Page HTML (Engineer Output)</h3>
-    <details>
-      <summary style="cursor:pointer;color:#cbd5e1;font-size:13px">Show HTML</summary>
-      <pre style="margin-top:8px;max-height:260px;overflow:auto;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px;color:#94a3b8;font-size:11px">{{ pipeline.landing_html }}</pre>
-    </details>
+    <h3>CEO Review Log</h3>
+    {% for r in pipeline.get('ceo_review_log', []) %}
+      <div class="timeline-item">
+        <div style="font-size:13px;color:#e2e8f0">
+          <strong>{{ r.agent }}</strong>
+          · score <strong>{{ r.score }}</strong>/10
+          · acceptable:
+          <strong style="color:{{ '#86efac' if r.acceptable else '#fca5a5' }}">{{ 'yes' if r.acceptable else 'no' }}</strong>
+        </div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:4px"><strong>rationale:</strong> {{ r.rationale }}</div>
+        {% if r.follow_up_instruction %}
+          <div style="font-size:12px;color:#fbbf24;margin-top:4px"><strong>follow_up_instruction:</strong> {{ r.follow_up_instruction }}</div>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="box">No review decisions available yet.</div>
+    {% endfor %}
   </div>
-  {% endif %}
 
-  {% if pipeline.get('qa_report') %}
+  <!-- 7. MESSAGE BUS HISTORY -->
   <div class="card">
-    <h3>QA LLM Review Summary</h3>
-    <div style="font-size:13px;color:#94a3b8;line-height:1.7">
-      <div><strong style="color:#e2e8f0">HTML verdict:</strong> {{ pipeline.qa_report.html_review.verdict if pipeline.qa_report.html_review else 'N/A' }}</div>
-      <div><strong style="color:#e2e8f0">Copy verdict:</strong> {{ pipeline.qa_report.copy_review.verdict if pipeline.qa_report.copy_review else 'N/A' }}</div>
-    </div>
+    <h3>Message Bus History</h3>
+    {% for m in pipeline.get('message_feed', []) %}
+      <div class="feed-item">
+        <div style="font-size:13px;color:#e2e8f0">
+          <strong>{{ m.from_agent }}</strong> → <strong>{{ m.to_agent }}</strong>
+          <span class="mono" style="color:#94a3b8">({{ m.message_type }})</span>
+        </div>
+        <div style="font-size:12px;color:#64748b">{{ m.timestamp }}</div>
+        <div style="font-size:12px;color:#cbd5e1;margin-top:4px">
+          payload keys:
+          <span class="mono">{{ m.payload_keys }}</span>
+        </div>
+      </div>
+    {% else %}
+      <div class="box">No message bus history found yet.</div>
+    {% endfor %}
+  </div>
+
+  {% if pipeline.get('agent_error') %}
+  <div class="card">
+    <h3>Pipeline Error</h3>
+    <div class="json-box">{{ pipeline.agent_error }}</div>
   </div>
   {% endif %}
 
   {% if pipeline.get('ceo_summary_text') %}
   <div class="card">
     <h3>CEO Final Summary</h3>
-    <pre style="white-space:pre-wrap;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px;color:#94a3b8;font-size:12px">{{ pipeline.ceo_summary_text }}</pre>
+    <pre class="json-box" style="white-space:pre-wrap">{{ pipeline.ceo_summary_text }}</pre>
   </div>
   {% endif %}
 
-  <!-- ── Actions ── -->
   <div class="actions">
-    {% if pipeline.get('done') %}
-      <a href="/dashboard" class="btn btn-green">View Dashboard</a>
-      <a href="/messages" class="btn btn-blue">Message History</a>
-      {% if pipeline.get('pr_url') %}
-        <a href="{{ pipeline.pr_url }}" class="btn btn-gray" target="_blank">View GitHub PR</a>
-      {% endif %}
-    {% else %}
-      <span style="color:#64748b;font-size:14px">
-        <span class="spinner"></span> Auto-refreshing every 5 seconds…
-      </span>
+    <a href="/dashboard" class="btn">Dashboard</a>
+    <a href="/messages" class="btn">Messages</a>
+    {% if pipeline.get('pr_url') %}
+      <a href="{{ pipeline.pr_url }}" target="_blank" class="btn">Open PR</a>
     {% endif %}
-    <a href="/" class="btn btn-gray">New Request</a>
+    <a href="/invoice" class="btn">New Request</a>
+    {% if pipeline.pipeline_status == "running" %}
+      <span style="color:#64748b;font-size:13px">Auto-refresh every 5 seconds while running.</span>
+    {% else %}
+      <span style="color:#64748b;font-size:13px">Auto-refresh stopped ({{ pipeline.pipeline_status }}).</span>
+    {% endif %}
   </div>
 
 </div>
 
-{% if not pipeline.get('done') %}
+{% if pipeline.pipeline_status == "running" %}
 <script>
   setTimeout(() => location.reload(), 5000);
 </script>

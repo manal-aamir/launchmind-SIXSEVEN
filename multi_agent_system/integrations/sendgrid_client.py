@@ -1,10 +1,11 @@
 """SendGrid helper for marketing email actions."""
 
-from typing import Dict
+import base64
+from typing import Dict, Optional
 
 from python_http_client.exceptions import HTTPError
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
+from sendgrid.helpers.mail import Attachment, FileContent, FileName, FileType, Mail
 
 
 class SendGridClient:
@@ -13,7 +14,14 @@ class SendGridClient:
         self.from_email = from_email
         self.to_email = to_email
 
-    def send_email(self, subject: str, plain_text: str, html_text: str) -> Dict[str, str]:
+    def send_email(
+        self,
+        subject: str,
+        plain_text: str,
+        html_text: str,
+        pdf_bytes: Optional[bytes] = None,
+        pdf_filename: str = "invoice.pdf",
+    ) -> Dict[str, str]:
         message = Mail(
             from_email=self.from_email,
             to_emails=self.to_email,
@@ -21,6 +29,13 @@ class SendGridClient:
             plain_text_content=plain_text,
             html_content=html_text,
         )
+        if pdf_bytes:
+            attachment = Attachment(
+                FileContent(base64.b64encode(pdf_bytes).decode()),
+                FileName(pdf_filename),
+                FileType("application/pdf"),
+            )
+            message.attachment = attachment
         client = SendGridAPIClient(self.api_key)
         try:
             response = client.send(message)

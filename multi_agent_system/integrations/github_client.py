@@ -114,6 +114,30 @@ class GitHubClient:
             {"body": body, "event": "COMMENT", "comments": comments},
         )
 
+    def list_pr_files(self, pr_number: int) -> List[Dict[str, Any]]:
+        return list(self._request("GET", f"/pulls/{pr_number}/files") or [])
+
+    def create_review_comment_inline(
+        self,
+        pr_number: int,
+        commit_id: str,
+        path: str,
+        body: str,
+        line: int,
+        side: str = "RIGHT",
+    ) -> Dict[str, Any]:
+        """
+        Create an inline review comment anchored to a diff line.
+        """
+        payload = {
+            "body": body,
+            "commit_id": commit_id,
+            "path": path,
+            "line": int(line),
+            "side": side,
+        }
+        return self._request("POST", f"/pulls/{pr_number}/comments", payload)
+
     def create_review_comment(
         self,
         pr_number: int,

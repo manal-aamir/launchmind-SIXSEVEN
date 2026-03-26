@@ -48,13 +48,12 @@ class EngineerAgent:
             output["pr_url"] = "dry-run://pr"
             return AgentResult(agent_name=self.agent_name, task_id=task.task_id, output=output)
 
-        repo_data = self.github_client.get_repo()
-        base_branch = str(repo_data.get("default_branch", "main"))
+        # Assignment requirement: open PR against main.
+        # (If a repo uses a different default branch, update the assignment repo accordingly.)
+        base_branch = "main"
 
-        issue_title = str(assets.get("issue_title", "")).strip() or "Build InvoiceHound landing page"
-        # Keep issue title concise for GitHub UI readability.
-        if len(issue_title) > 120:
-            issue_title = issue_title[:117].rstrip() + "..."
+        # Assignment requirement: issue title must be exactly this.
+        issue_title = "Initial landing page"
         issue_body = str(assets.get("issue_body", "")) or f"Startup idea:\n{task.startup_idea}"
         issue = self.github_client.create_issue(issue_title, issue_body)
         output["issue_url"] = str(issue.get("html_url", ""))
@@ -81,7 +80,7 @@ class EngineerAgent:
                 head="agent-landing-page",
                 base=base_branch,
             )
-        except Exception as exc:
+        except Exception:
             # Common GitHub 422 causes:
             # - PR already exists for the same head/base
             # - No commits between base and head
@@ -91,13 +90,13 @@ class EngineerAgent:
                 pr = existing[0]
             else:
                 # Force a tiny change so there is definitely a diff
-                stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-                html2 = html + f"\n<!-- build: {stamp} -->\n"
+                stamp2 = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                html2 = html + f"\n<!-- build: {stamp2} -->\n"
                 self.github_client.upsert_file(
                     branch="agent-landing-page",
                     path="index.html",
                     content_text=html2,
-                    message=f"Update landing page build stamp {stamp}",
+                    message=f"Update landing page build stamp {stamp2}",
                 )
                 pr = self.github_client.create_pr(
                     title=pr_title,

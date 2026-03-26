@@ -18,6 +18,13 @@ import json
 import threading
 from datetime import date
 from pathlib import Path
+import re
+
+try:
+    from weasyprint import HTML as WeasyprintHTML
+    _WEASYPRINT_OK = True
+except Exception:
+    _WEASYPRINT_OK = False
 
 from flask import Flask, flash, redirect, render_template, request, url_for, Response
 
@@ -110,17 +117,60 @@ def _all_invoices() -> list:
 
 def _build_team_assignments(team_members: list, product_spec: dict) -> list:
     """
-    Create simple task assignments from Product spec features.
-    Assignment rule: sort members by hours desc, then round-robin features.
+    Assign product spec features to team members by role similarity,
+    then fall back to round-robin so every feature gets an owner.
+
+    Role matching logic:
+      - Feature name/description keywords → matched against member role string
+      - Keywords for design: ui, ux, design, interface, visual, wireframe, frontend, front-end, css
+      - Keywords for dev/eng: backend, dev, engineer, api, database, logic, server, integration, code
+      - Keywords for qa: qa, test, review, quality
+      - Keywords for marketing: marketing, copy, social, email, campaign
+      - Keywords for product/pm: product, pm, strategy, roadmap, spec, research
     """
     features = product_spec.get("features") or product_spec.get("core_features_ranked") or []
     if not team_members or not features:
         return []
 
-    members = sorted(team_members, key=lambda m: float(m.get("hours_worked", 0)), reverse=True)
+    # Build role buckets — map lowercased role keyword → member
+    ROLE_KEYWORDS = {
+        "design":    ["ui", "ux", "design", "interface", "visual", "wireframe", "frontend", "front-end", "css", "figma"],
+        "dev":       ["backend", "developer", "dev", "engineer", "api", "database", "logic", "server", "integration", "code", "fullstack"],
+        "qa":        ["qa", "test", "quality", "review", "assurance"],
+        "marketing": ["marketing", "copy", "social", "email", "campaign", "growth"],
+        "product":   ["product", "pm", "manager", "strategy", "roadmap", "spec", "research", "analyst"],
+    }
+
+    def _best_member(feat: dict) -> dict:
+        feat_text = (feat.get("name", "") + " " + feat.get("description", "")).lower()
+        best = None
+        best_score = -1
+        for member in team_members:
+            role_lower = member.get("role", "").lower()
+            score = 0
+            for bucket, kws in ROLE_KEYWORDS.items():
+                if any(kw in role_lower for kw in kws):
+                    score += sum(1 for kw in kws if kw in feat_text)
+            if score > best_score:
+                best_score = score
+                best = member
+        return best or team_members[0]
+
+    # Sort members by hours worked descending for tie-breaking
+    members_sorted = sorted(team_members, key=lambda m: float(m.get("hours_worked", 0)), reverse=True)
+
     assignments = []
+    # Track how many tasks each member already owns for load-balancing
+    load: dict = {m.get("name", i): 0 for i, m in enumerate(members_sorted)}
+
     for idx, feat in enumerate(features):
-        member = members[idx % len(members)]
+        member = _best_member(feat)
+        # If tie (score=0 means no match), use the least-loaded member
+        if load[member.get("name", 0)] > 0:
+            candidate = min(members_sorted, key=lambda m: load[m.get("name", "")])
+            if load[candidate.get("name", "")] < load[member.get("name", "")]:
+                member = candidate
+        load[member.get("name", "")] = load.get(member.get("name", ""), 0) + 1
         assignments.append(
             {
                 "member_name": member.get("name", ""),
@@ -187,21 +237,37 @@ def dashboard():
 
 @app.route("/pipeline/<invoice_id>")
 def pipeline_status(invoice_id):
-    """Live pipeline status page — auto-refreshes every 5 s until done."""
+    """Live pipeline/debug page — auto-refreshes every 5 s while running."""
     state = _pipeline_states.get(invoice_id, {})
-    # Merge persisted record fields (pr_url, issue_url, etc.)
+
+    def _safe_load_json(path_str: str):
+        if not path_str:
+            return None
+        try:
+            p = Path(path_str)
+            if p.exists():
+                return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        return None
+
+    # Merge persisted record fields (source of truth for debug view)
     try:
         rec = _load(invoice_id)
         state.setdefault("project_name", rec.get("project_name", ""))
-        state.setdefault("client_name",  rec.get("client_name", ""))
+        state.setdefault("client_name", rec.get("client_name", ""))
+        state.setdefault("project_description", rec.get("project_description", ""))
         state["invoice_id"] = invoice_id
+
+        # Base persisted outputs
         if rec.get("pr_url"):
             state["pr_url"] = rec["pr_url"]
         if rec.get("issue_url"):
             state["issue_url"] = rec["issue_url"]
-        if rec.get("agent_error"):
-            state["agent_error"] = rec["agent_error"]
-            state["done"] = True
+        if rec.get("product_spec"):
+            state["product_spec"] = rec["product_spec"]
+        if rec.get("task_messages"):
+            state["task_messages"] = rec["task_messages"]
         if rec.get("marketing_copy"):
             state["marketing_copy"] = rec["marketing_copy"]
         if rec.get("marketing_recipient"):
@@ -212,8 +278,128 @@ def pipeline_status(invoice_id):
             state["landing_html"] = rec["landing_html"]
         if rec.get("qa_report"):
             state["qa_report"] = rec["qa_report"]
+        if rec.get("qa"):
+            state["qa"] = rec["qa"]
+        if rec.get("engineer_output"):
+            state["engineer_output"] = rec["engineer_output"]
+
+        if rec.get("agent_error"):
+            state["agent_error"] = rec["agent_error"]
+            state["done"] = True
+
+        # Infer completion even if in-memory state was lost after restart.
+        if rec.get("ceo_summary_text") or rec.get("qa_report"):
+            state["done"] = True
+
+        # Resolve message log path (new key first, then derive from decision log).
+        message_log_path = rec.get("message_log_path", "")
+        if not message_log_path and rec.get("agent_log"):
+            guess = str(rec["agent_log"]).replace("ceo_decisions_", "message_log_")
+            if Path(guess).exists():
+                message_log_path = guess
+
+        messages = _safe_load_json(message_log_path) or []
+        state["message_bus_history"] = messages
+
+        # Build CEO decomposition block from saved task messages or message log.
+        ceo_decompose = {
+            "product_task": {"task_brief": ""},
+            "engineer_task": {"task_brief": ""},
+            "marketing_task": {"task_brief": ""},
+        }
+        tm = state.get("task_messages", {}) or {}
+        for key in ("product", "engineer", "marketing"):
+            obj = tm.get(key, {}) if isinstance(tm, dict) else {}
+            if isinstance(obj, dict) and obj.get("task_brief"):
+                ceo_decompose[f"{key}_task"]["task_brief"] = obj.get("task_brief", "")
+        if messages:
+            wanted = {"product": "product_task", "engineer": "engineer_task", "marketing": "marketing_task"}
+            for m in messages:
+                if m.get("from_agent") == "ceo" and m.get("message_type") in {"task", "revision_request"}:
+                    to_agent = m.get("to_agent")
+                    bucket = wanted.get(to_agent)
+                    brief = (m.get("payload") or {}).get("brief", "")
+                    if bucket and brief and not ceo_decompose[bucket]["task_brief"]:
+                        ceo_decompose[bucket]["task_brief"] = brief
+        state["ceo_task_decomposition"] = ceo_decompose
+
+        # Engineer output view model.
+        eng_out = state.get("engineer_output", {}) if isinstance(state.get("engineer_output"), dict) else {}
+        branch = eng_out.get("branch") or rec.get("branch_name") or "agent-landing-page"
+        html_blob = state.get("landing_html") or eng_out.get("html") or ""
+        state["engineer_debug"] = {
+            "issue_url": state.get("issue_url", ""),
+            "pr_url": state.get("pr_url", ""),
+            "branch_name": branch,
+            "html_preview": str(html_blob)[:500],
+        }
+
+        # QA view model (verdict/issues/comments).
+        qa_report = state.get("qa_report", {}) if isinstance(state.get("qa_report"), dict) else {}
+        html_review = qa_report.get("html_review", {}) if isinstance(qa_report.get("html_review"), dict) else {}
+        copy_review = qa_report.get("copy_review", {}) if isinstance(qa_report.get("copy_review"), dict) else {}
+        qa_obj = state.get("qa", {}) if isinstance(state.get("qa"), dict) else {}
+        qa_passed = qa_obj.get("passed")
+        if qa_passed is None:
+            qa_passed = (str(html_review.get("verdict", "")).lower() == "pass"
+                         and str(copy_review.get("verdict", "")).lower() == "pass")
+        issues = list(html_review.get("issues", []) or []) + list(copy_review.get("issues", []) or [])
+        comments = list(html_review.get("comments", []) or []) + list(copy_review.get("comments", []) or [])
+        state["qa_debug"] = {
+            "verdict": "PASS" if qa_passed else "FAIL",
+            "issues": issues,
+            "comments": comments,
+        }
+
+        # CEO review decisions timeline from decision log.
+        ceo_review_log = []
+        decision_entries = _safe_load_json(rec.get("agent_log", "")) or []
+        for entry in decision_entries:
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("stage") != "review":
+                continue
+            detail = str(entry.get("detail", ""))
+            data = entry.get("data", {}) if isinstance(entry.get("data"), dict) else {}
+            # detail format: "product round 0: acceptable=True score=9/10"
+            m = re.match(r"([a-z_]+)\s+round\s+\d+:\s+acceptable=(True|False)\s+score=(\d+)/10", detail)
+            ceo_review_log.append(
+                {
+                    "agent": m.group(1) if m else detail.split(" ")[0] if detail else "unknown",
+                    "score": int(m.group(3)) if m else data.get("score"),
+                    "acceptable": (m.group(2) == "True") if m else bool(data.get("score", 0) >= 8),
+                    "rationale": data.get("rationale", ""),
+                    "follow_up_instruction": data.get("follow_up_instruction", ""),
+                }
+            )
+        state["ceo_review_log"] = ceo_review_log
+
+        # Message bus feed model: show keys only (not full payload).
+        feed = []
+        for m in messages:
+            payload = m.get("payload") if isinstance(m, dict) else {}
+            keys = list(payload.keys()) if isinstance(payload, dict) else []
+            feed.append(
+                {
+                    "from_agent": m.get("from_agent", ""),
+                    "to_agent": m.get("to_agent", ""),
+                    "message_type": m.get("message_type", ""),
+                    "timestamp": m.get("timestamp", ""),
+                    "payload_keys": keys,
+                }
+            )
+        state["message_feed"] = feed
+
     except Exception:
         pass
+
+    if state.get("agent_error"):
+        state["pipeline_status"] = "error"
+    elif state.get("done"):
+        state["pipeline_status"] = "complete"
+    else:
+        state["pipeline_status"] = "running"
+
     state["invoice_id"] = invoice_id
     return render_template("pipeline.html", pipeline=state)
 
@@ -267,34 +453,71 @@ def submit():
     do_agents = "run_agents"  in f
 
     if do_email:
-        email_copy = groq_client.write_invoice_email(
-            project_name=inv.project_name,
-            client_name=inv.client_name,
-            total_amount=inv.total_amount,
-            currency=inv.currency,
-            due_date=inv.due_date,
-            invoice_id=inv.invoice_id,
-            line_items=record["line_items"],
-        )
-        subject  = email_copy.get("subject", f"Invoice {inv.invoice_id}")
-        body     = email_copy.get("body", "")
-        html_inv = invoice_engine.generate_html(inv, include_internal_split=False)
-        html_body = f"<p>{body.replace(chr(10), '<br>')}</p><hr>" + html_inv
-        client_sg = SendGridClient(
-            api_key=env.get("SENDGRID_API_KEY", ""),
-            from_email=env.get("SENDGRID_FROM_EMAIL", ""),
-            to_email=inv.client_email,
-        )
-        receipt = client_sg.send_email(subject=subject, plain_text=body, html_text=html_body) \
-                  if execute_actions else {"ok": "dry-run"}
-        record["email_sent"]    = True
-        record["email_receipt"] = receipt
+        try:
+            email_copy = groq_client.write_invoice_email(
+                project_name=inv.project_name,
+                client_name=inv.client_name,
+                total_amount=inv.total_amount,
+                currency=inv.currency,
+                due_date=inv.due_date,
+                invoice_id=inv.invoice_id,
+                line_items=record["line_items"],
+            )
+            subject = email_copy.get("subject", f"Invoice {inv.invoice_id}")
+
+            # Plain text body — clean and professional, no inline invoice HTML
+            plain_body = (
+                f"Dear {inv.client_name},\n\n"
+                f"Please find your invoice attached for {inv.project_name}.\n\n"
+                f"Invoice ID: {inv.invoice_id}\n"
+                f"Total: Rs {inv.total_amount:,.2f}\n"
+                f"Due Date: {inv.due_date}\n\n"
+                f"Please review the attached PDF and let us know if you have any questions.\n\n"
+                f"Best regards,\nThe InvoiceHound Team"
+            )
+
+            # Generate PDF from the invoice HTML (no status banner for client-facing PDF)
+            html_inv = invoice_engine.generate_html(inv, include_internal_split=False, show_status_banner=False)
+            pdf_bytes = None
+            if _WEASYPRINT_OK:
+                try:
+                    pdf_bytes = WeasyprintHTML(string=html_inv).write_pdf()
+                    print(f"[PDF] Invoice PDF generated for {inv.invoice_id}")
+                except Exception as pdf_err:
+                    print(f"[PDF] weasyprint failed: {pdf_err} — sending without attachment")
+
+            client_sg = SendGridClient(
+                api_key=env.get("SENDGRID_API_KEY", ""),
+                from_email=env.get("SENDGRID_FROM_EMAIL", ""),
+                to_email=inv.client_email,
+            )
+            receipt = client_sg.send_email(
+                subject=subject,
+                plain_text=plain_body,
+                html_text=f"<pre style='font-family:Arial,sans-serif;font-size:14px'>{plain_body}</pre>",
+                pdf_bytes=pdf_bytes,
+                pdf_filename=f"InvoiceHound_{inv.invoice_id}.pdf",
+            ) if execute_actions else {"ok": "dry-run"}
+            record["email_sent"] = bool(receipt.get("ok"))
+            record["email_receipt"] = receipt
+            if not record["email_sent"]:
+                record["email_error"] = str(receipt.get("error", "Email send failed"))
+                flash(f"Email send failed: {record['email_error']}", "error")
+        except Exception as exc:
+            record["email_sent"] = False
+            record["email_receipt"] = {"ok": False, "error": str(exc)}
+            record["email_error"] = str(exc)
+            flash(f"Email send failed: {exc}", "error")
         _save(record)
 
     if do_slack:
-        result = reminder_engine.check_and_send(inv, simulate_days_overdue=1)
-        record["slack_reminders"].append("Day 1")
-        record["reminder_receipts"] = {"day_1": result}
+        try:
+            result = reminder_engine.check_and_send(inv, simulate_days_overdue=1)
+            record["slack_reminders"].append("Day 1")
+            record["reminder_receipts"] = {"day_1": result}
+        except Exception as exc:
+            record["reminder_receipts"] = {"day_1": {"ok": False, "error": str(exc)}}
+            flash(f"Slack reminder failed: {exc}", "error")
         _save(record)
 
     if do_agents:
@@ -342,10 +565,12 @@ def submit():
 
                 ceo._run_with_review = _tracked_rwr
                 state["agent_active"] = "ceo"
-                base_request = development_request or inv.project_name
+                # IMPORTANT: the agent pipeline is always for the startup product (InvoiceHound),
+                # not the client's one-off project request.
                 idea = (
-                    f"InvoiceHound — Build request: {base_request}. "
-                    f"Client: {inv.client_name}."
+                    "InvoiceHound — a tool for freelance teams that generates one professional client invoice, "
+                    "splits earnings internally by hours worked, and automatically sends Day 1 / Day 7 / Day 14 "
+                    "payment reminders (Slack nudges + a formal overdue email with the HTML invoice)."
                 )
                 result = ceo.run(startup_idea=idea, dry_run=not execute_actions)
                 state["agent_done"]["ceo"] = True
@@ -395,7 +620,15 @@ def submit():
                 rec["pr_url"]    = state["pr_url"]
                 rec["issue_url"] = state["issue_url"]
                 rec["agent_log"] = result.get("decision_log_path", "")
+                rec["message_log_path"] = result.get("message_log_path", "")
+                rec["task_messages"] = state.get("task_messages", {})
                 rec["product_spec"] = product
+                rec["qa"] = result.get("qa", {})
+                rec["engineer_output"] = {
+                    "issue_url": state["issue_url"],
+                    "pr_url": state["pr_url"],
+                    "branch": eng.get("branch", "agent-landing-page"),
+                }
                 rec["team_assignments"] = _build_team_assignments(
                     rec.get("team_members", []), product
                 )
@@ -561,7 +794,7 @@ def _rebuild_invoice(record: dict):
         due_date=record["due_date"],
         line_items=items,
         team_members=team,
-        currency=record.get("currency", "USD"),
+        currency=record.get("currency", "PKR"),
         paid=record.get("paid", False),
     )
     inv.payment_splits = record.get("payment_splits", {})

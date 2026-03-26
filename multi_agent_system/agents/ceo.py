@@ -762,6 +762,15 @@ class CEOAgent:
             qa_notes=f"{qa_notes} Issues: {qa_issues}",
         )
 
+        # Always persist the final summary into the message history (even in dry-run)
+        # so `/messages` can demonstrate the end-to-end conversation.
+        self.bus.send(
+            from_agent="ceo",
+            to_agent="slack_channel",
+            message_type="final_summary",
+            payload={"summary": final_summary},
+        )
+
         slack_response: Dict[str, Any] = {"ok": False, "reason": "dry_run_or_missing_channel"}
         if not dry_run and self.slack_channel_id:
             slack_response, post_failure = safe_call(

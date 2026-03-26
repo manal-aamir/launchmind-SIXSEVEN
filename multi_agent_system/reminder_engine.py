@@ -51,9 +51,9 @@ class ReminderEngine:
              "text": {"type": "mrkdwn",
                       "text": (
                           f"Invoice *{inv.invoice_id}* for *{inv.client_name}* is due today.\n\n"
-                          f"*Total bill:* {inv.currency} {inv.total_amount:,.2f}\n"
+                          f"*Total bill for project {inv.project_name}:* {inv.currency} {inv.total_amount:,.2f}\n"
                           f"*Due date:* {inv.due_date}\n\n"
-                          "This is an FYI with the total due (not a harsh reminder). "
+                          "This is an FYI with the total due. "
                           "InvoiceHound will handle follow-ups automatically if unpaid."
                       )}},
             {"type": "context",
