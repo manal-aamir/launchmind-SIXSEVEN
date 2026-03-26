@@ -33,10 +33,32 @@ class EngineerAgent:
         }
         html = str(assets.get("html", ""))
 
+        # Pull hero copy from generated HTML when present so UI matches the iframe
+        headline = "InvoiceHound"
+        subheadline = "Freelance invoicing and payment reminders."
+        cta = "Get started"
+        try:
+            import re
+            m = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.I | re.DOTALL)
+            if m:
+                headline = re.sub(r"<[^>]+>", " ", m.group(1)).replace("\n", " ").strip()[:200]
+            m2 = re.search(
+                r"class=\"hero\"[^>]*>.*?<p[^>]*>(.*?)</p>",
+                html,
+                re.I | re.DOTALL,
+            )
+            if m2:
+                subheadline = re.sub(r"<[^>]+>", " ", m2.group(1)).replace("\n", " ").strip()[:240]
+            m3 = re.search(r"class=\"hero-cta\"[^>]*>(.*?)</a>", html, re.I | re.DOTALL)
+            if m3:
+                cta = re.sub(r"<[^>]+>", " ", m3.group(1)).strip()[:120]
+        except Exception:
+            pass
+
         output: Dict[str, Any] = {
-            "headline": "Your team did the work. We make sure you get paid.",
-            "subheadline": "One invoice to the client. Automatic reminders. Fair splits. Zero awkward conversations.",
-            "cta": "Start Chasing Invoices Free",
+            "headline": headline,
+            "subheadline": subheadline,
+            "cta": cta,
             "html": html,
             "issue_url": "",
             "pr_url": "",

@@ -34,6 +34,7 @@ _pipeline_states: dict = {}
 from multi_agent_system.agents.ceo import CEOAgent
 from multi_agent_system.env_utils import load_dotenv_file
 from multi_agent_system.deepseek_client import DeepSeekClient
+from multi_agent_system.gemini_client import GeminiClient
 from multi_agent_system.groq_client import GroqClient
 from multi_agent_system.integrations.github_client import GitHubClient
 from multi_agent_system.integrations.sendgrid_client import SendGridClient
@@ -68,10 +69,15 @@ deepseek_client = DeepSeekClient(
     api_key=env.get("DEEPSEEK_API_KEY", ""),
     model=env.get("DEEPSEEK_MODEL", "deepseek-chat"),
 )
+gemini_client = GeminiClient(
+    api_key=env.get("GEMINI_API_KEY", ""),
+    model=env.get("GEMINI_MODEL", "gemini-2.0-flash"),
+)
 groq_client = GroqClient(
     api_key=env.get("GROQ_API_KEY", ""),
     model=env.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
     fallback=deepseek_client,
+    gemini_fallback=gemini_client,
 )
 github_client = GitHubClient(
     token=env.get("GITHUB_TOKEN", ""),
@@ -539,6 +545,8 @@ def submit():
                 print(f"[Pipeline:{inv_id}] Build request: {development_request}")
                 ceo = CEOAgent(
                     groq_client=groq_client,
+                    deepseek_client=deepseek_client,
+                    gemini_client=gemini_client,
                     redis_bus=redis_bus,
                     slack_client=slack_client,
                     github_client=github_client,
@@ -663,30 +671,6 @@ def remind(invoice_id, day):
         record = _load(invoice_id)
         inv = _rebuild_invoice(record)
         result = reminder_engine.check_and_send(inv, simulate_days_overdue=day)
-
-        if day == 14:
-            # Day 14 uses SendGrid — LLM writes the message
-            msg_copy = groq_client.write_reminder_message(
-                client_name=record["client_name"],
-                project_name=record["project_name"],
-                invoice_id=invoice_id,
-                total_amount=record["total_amount"],
-                currency=record["currency"],
-                days_overdue=14,
-            )
-            html_inv = invoice_engine.generate_html(_rebuild_invoice(record))
-            html_body = f"<p>{msg_copy.get('body','').replace(chr(10),'<br>')}</p><hr>" + html_inv
-            client_sg = SendGridClient(
-                api_key=env.get("SENDGRID_API_KEY", ""),
-                from_email=env.get("SENDGRID_FROM_EMAIL", ""),
-                to_email=record["client_email"],
-            )
-            if execute_actions:
-                client_sg.send_email(
-                    subject=msg_copy.get("subject", f"Overdue: {invoice_id}"),
-                    plain_text=msg_copy.get("body", ""),
-                    html_text=html_body,
-                )
 
         label = f"Day {day}"
         if label not in record.get("slack_reminders", []):

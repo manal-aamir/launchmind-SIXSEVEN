@@ -13,12 +13,17 @@ Falls back to structured mock outputs when no API key is provided.
 from __future__ import annotations
 
 import json
+import random
+import re
+import uuid
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from groq import Groq
 
 from multi_agent_system.models import ReviewDecision
 from multi_agent_system.deepseek_client import DeepSeekClient
+from multi_agent_system.gemini_client import GeminiClient
 from multi_agent_system.prompts import (
     QA_HTML_ROLE_PROMPT,
     QA_COPY_ROLE_PROMPT,
@@ -37,11 +42,13 @@ class GroqClient:
         api_key: str,
         model: str = "llama-3.3-70b-versatile",
         fallback: Optional[DeepSeekClient] = None,
+        gemini_fallback: Optional[GeminiClient] = None,
     ) -> None:
         self.model = model
         self.enabled = bool(api_key)
         self._client: Optional[Groq] = Groq(api_key=api_key) if self.enabled else None
         self.fallback = fallback
+        self.gemini_fallback = gemini_fallback
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -61,27 +68,113 @@ class GroqClient:
             raise ValueError(f"No JSON found in Groq response: {text[:200]}")
         return json.loads(text[start: end + 1])
 
+    @staticmethod
+    def _engineer_run_contract() -> Dict[str, str]:
+        """Randomized design constraints so each engineer run gets a different HTML/CSS outcome."""
+        themes = [
+            ("emerald", "#10b981", "#34d399", "#020617"),
+            ("electric_blue", "#3b82f6", "#60a5fa", "#0a0f1c"),
+            ("warm_orange", "#f97316", "#fb923c", "#140a04"),
+            ("purple_violet", "#8b5cf6", "#a78bfa", "#0c0618"),
+            ("coral_red", "#f43f5e", "#fb7185", "#16060a"),
+            ("golden_yellow", "#eab308", "#facc15", "#141004"),
+        ]
+        name, primary, accent2, page_bg = random.choice(themes)
+        orders = [
+            "After hero: (1) Features grid → (2) Reminder Day1/7/14 → (3) How it works → (4) Team splits → footer.",
+            "After hero: (1) Reminder schedule → (2) Features → (3) How it works → (4) Team splits → footer.",
+            "After hero: (1) How it works → (2) Features → (3) Reminder schedule → (4) Team splits → footer.",
+            "After hero: (1) Features → (2) How it works → (3) Reminder schedule → (4) Team splits → footer.",
+        ]
+        typography = random.choice(
+            [
+                "Heavy / punchy: H1 font-weight 800–900, tight letter-spacing, uppercase subnav feel.",
+                "Elegant / editorial: H1 font-weight 200–500, generous letter-spacing, refined sans-serif.",
+            ]
+        )
+        bg_style = random.choice(
+            [
+                "Body: subtle CSS geometric pattern (repeating-linear-gradient or grid lines), low contrast.",
+                "Body: flat solid dark using the page_bg hex below (no pattern).",
+                "Body: multi-stop diagonal or radial gradient using page_bg + a darker shade.",
+            ]
+        )
+        card_style = random.choice(
+            [
+                "Cards: border-radius 4px, sharp, thin 1px borders.",
+                "Cards: border-radius 20px, soft shadow, floating look.",
+                "Cards: square corners, thick left 4px accent border in primary color.",
+                "Cards: circular icon badges above titles, rounded-xl cards.",
+            ]
+        )
+        ctas = [
+            "Start Chasing Invoices Free",
+            "Get Paid Faster",
+            "Stop Chasing, Start Earning",
+            "Try InvoiceHound Free",
+            "Automate My Invoicing",
+        ]
+        heroes = [
+            "Stop begging for invoices. Start getting paid.",
+            "One invoice. Smart reminders. Everyone gets their share.",
+            "Freelance teams deserve payments without the awkward silence.",
+            "Chase revenue, not clients — InvoiceHound handles the rest.",
+            "Late payments end here. Professional follow-ups, zero cringe.",
+            "Ship work. Send one bill. Let reminders do the talking.",
+        ]
+        gen_id = uuid.uuid4().hex[:12]
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return {
+            "gen_id": gen_id,
+            "ts": ts,
+            "accent_name": name,
+            "primary_hex": primary,
+            "accent2_hex": accent2,
+            "page_bg_hex": page_bg,
+            "section_order": random.choice(orders),
+            "typography": typography,
+            "background_treatment": bg_style,
+            "card_style": card_style,
+            "cta_exact": random.choice(ctas),
+            "hero_h1": random.choice(heroes),
+        }
+
+    @staticmethod
+    def _vary_engineer_mock_html(html: str, ec: Dict[str, str]) -> str:
+        """Tint fallback mock HTML so even Groq-offline runs look different each time."""
+        h = html.replace("#22c55e", ec["primary_hex"]).replace("#3b82f6", ec["accent2_hex"])
+        h = h.replace("#0b1220", ec["page_bg_hex"])
+        old_hero = "<h1>Your team did the work.<br>We make sure you get paid.</h1>"
+        h = h.replace(old_hero, f"<h1>{ec['hero_h1']}</h1>")
+        h = h.replace("Start Chasing Invoices Free", ec["cta_exact"])
+        h = h.replace("<body>", f"<body>\n\n<!-- ih-gen: {ec['gen_id']} -->\n", 1)
+        return h
+
     def _complete_json(
         self,
         role_prompt: str,
         user_prompt: str,
         mock_default: Dict[str, Any],
         temperature: float = 0.2,
+        top_p: Optional[float] = None,
     ) -> Dict[str, Any]:
         if not self.enabled or not self._client:
             print(f"[GROQ FALLBACK] Using mock for {role_prompt[:50]}")
             return mock_default
 
         system_prompt = compose_system_prompt(role_prompt)
+        create_kwargs: Dict[str, Any] = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_prompt},
+            ],
+            "temperature": temperature,
+        }
+        if top_p is not None:
+            create_kwargs["top_p"] = top_p
         try:
-            response = self._client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user",   "content": user_prompt},
-                ],
-                temperature=temperature,
-            )
+            response = self._client.chat.completions.create(**create_kwargs)
             text = response.choices[0].message.content or ""
             parsed = self._extract_json(text)
             print(f"[GROQ LLM] Successfully called LLM for {role_prompt[:50]}")
@@ -100,6 +193,15 @@ class GroqClient:
                     return self.fallback.complete_json(role_prompt, user_prompt, mock_default)
                 except Exception as e2:
                     print(f"[GROQ FALLBACK] DeepSeek also failed: {e2}")
+
+            if self.gemini_fallback and self.gemini_fallback.enabled:
+                try:
+                    print("[GROQ FALLBACK] Trying Gemini fallback...")
+                    out = self.gemini_fallback.complete_json(role_prompt, user_prompt, mock_default)
+                    print(f"[GROQ LLM] Gemini succeeded for {role_prompt[:50]}")
+                    return out
+                except Exception as e3:
+                    print(f"[GROQ FALLBACK] Gemini also failed: {e3}")
 
             print(f"[GROQ MOCK] Returning mock for role: {role_prompt[:60]}")
             return mock_default
@@ -547,6 +649,12 @@ class GroqClient:
           - pr_title:     string (LLM-generated)
           - pr_body:      string (LLM-generated, markdown ok)
         """
+        ec = self._engineer_run_contract()
+        print(
+            f"[ENGINEER LLM] Unique run contract: gen_id={ec['gen_id']} "
+            f"accent={ec['accent_name']} cta={ec['cta_exact']!r}"
+        )
+
         mock_html = """<!doctype html>
 <html lang="en">
 <head>
@@ -736,10 +844,11 @@ class GroqClient:
 
 </body>
 </html>"""
+        mock_html = self._vary_engineer_mock_html(mock_html, ec)
 
         mock = {
             "html": mock_html,
-            "branch_name": "feat/invoicehound-landing-page",
+            "branch_name": f"feat/invoicehound-{ec['gen_id'][:10]}",
             "issue_title": "Initial landing page",
             "issue_body": (
                 "## Task\n"
@@ -770,7 +879,27 @@ class GroqClient:
             ),
         }
 
-        user_prompt = (
+        contract_block = (
+            "=== MANDATORY RUN DESIGN CONTRACT (unique this request — implement every line in HTML/CSS) ===\n"
+            f"generation_id: {ec['gen_id']}\n"
+            f"timestamp_utc: {ec['ts']}\n"
+            f"accent_theme: {ec['accent_name']} — use CSS colors primary={ec['primary_hex']}, "
+            f"accent2={ec['accent2_hex']}, page_background={ec['page_bg_hex']}\n"
+            f"section_order_after_hero: {ec['section_order']}\n"
+            f"typography: {ec['typography']}\n"
+            f"background_treatment: {ec['background_treatment']}\n"
+            f"card_style: {ec['card_style']}\n"
+            f"hero_h1_text (use this exact sentence as the main H1): {ec['hero_h1']!r}\n"
+            f"primary_cta_button_label (exact string on the main hero button): {ec['cta_exact']!r}\n"
+            f"branch_name suggestion: feat/invoicehound-{ec['gen_id'][:10]}\n"
+            "Right after <body>, include HTML comment: <!-- ih-gen: "
+            + ec["gen_id"]
+            + " -->\n"
+            "Do NOT reuse a previous layout or color scheme from memory — this contract overrides defaults.\n"
+            "=== END CONTRACT ===\n\n"
+        )
+
+        user_prompt = contract_block + (
             f"Startup idea:\n{startup_idea}\n\n"
             f"Product spec JSON:\n{json.dumps(product_spec, indent=2)[:6000]}\n\n"
         )
@@ -782,7 +911,8 @@ class GroqClient:
             "Return ONLY valid JSON with exactly these keys:\n"
             "- html: complete index.html (must include: nav, hero with H1+CTA, features grid from spec, "
             "  reminder schedule Day1/Day7/Day14, how-it-works steps, team-splits section, footer; all inline CSS)\n"
-            "- branch_name: short kebab-case git branch name starting with 'feat/' (e.g. 'feat/invoicehound-landing-v1')\n"
+            "- branch_name: short kebab-case git branch name starting with 'feat/' — MUST include the generation_id "
+            "from the contract above (e.g. 'feat/invoicehound-abc123def4')\n"
             "- issue_title: must be exactly 'Initial landing page'\n"
             "- issue_body: detailed GitHub issue description (markdown, include requirements + acceptance criteria)\n"
             "- pr_title: pull request title (keep concise)\n"
@@ -790,14 +920,51 @@ class GroqClient:
             "The HTML must reflect the actual product spec features provided above — not generic placeholders.\n"
             "This landing page is for the startup product InvoiceHound — NOT a client-specific project website.\n"
             "The page title and branding must be 'InvoiceHound'. Do not use a client project name.\n"
-            "Minimum HTML length: 3000 characters. Include all 6 required sections.\n"
+            "Minimum HTML length: 3000 characters. Include all 6 required sections.\n\n"
+            "IMPORTANT: Generate a visually unique landing page every time.\n"
+            "Vary the following on each run:\n"
+            "- Color scheme: choose a different accent color each run "
+            "(options: emerald green, electric blue, warm orange, "
+            "purple violet, coral red, golden yellow)\n"
+            "- Hero headline: write a completely different headline each run, "
+            "never repeat 'Your team did the work. We make sure you get paid.'\n"
+            "- Layout order: vary which section comes first after the hero "
+            "(sometimes features first, sometimes How It Works first, "
+            "sometimes reminder schedule first)\n"
+            "- Typography feel: vary between bold/heavy headlines vs "
+            "elegant/thin headlines\n"
+            "- Background pattern: sometimes add subtle geometric patterns, "
+            "sometimes use solid dark, sometimes use gradient backgrounds\n"
+            "- CTA button text: vary between options like: "
+            "'Start Chasing Invoices Free' / 'Get Paid Faster' / "
+            "'Stop Chasing, Start Earning' / 'Try InvoiceHound Free'\n"
+            "- Card style: sometimes rounded cards, sometimes sharp edges, "
+            "sometimes with left border accents, sometimes with icon badges\n\n"
+            "The page must look noticeably different from the previous version "
+            "every single time it is generated."
         )
 
-        return self._complete_json(
+        result = self._complete_json(
             role_prompt=ENGINEER_ROLE_PROMPT,
             user_prompt=user_prompt,
             mock_default=mock,
+            temperature=1.0,
+            top_p=0.92,
         )
+        if isinstance(result, dict) and result.get("html"):
+            h = str(result["html"])
+            if ec["gen_id"] not in h:
+                h, n = re.subn(
+                    r"<body([^>]*)>",
+                    rf"<body\1>\n<!-- ih-gen: {ec['gen_id']} -->\n",
+                    h,
+                    count=1,
+                    flags=re.I,
+                )
+                if n == 0 and "<body>" in h:
+                    h = h.replace("<body>", f"<body>\n<!-- ih-gen: {ec['gen_id']} -->\n", 1)
+                result["html"] = h
+        return result
 
     # ------------------------------------------------------------------
     # Marketing generation (Agent 4) — Groq-only

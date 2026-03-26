@@ -49,3 +49,22 @@ class DeepSeekClient:
         content = (resp.choices[0].message.content or "").strip()
         return self._extract_json(content)
 
+    def complete_text(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.3,
+    ) -> str:
+        """Raw text completion (e.g. Product Agent JSON — caller parses)."""
+        if not self.enabled or not self._client:
+            return ""
+        resp = self._client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=temperature,
+        )
+        return (resp.choices[0].message.content or "").strip()
+

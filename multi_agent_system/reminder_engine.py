@@ -4,14 +4,13 @@ Reminder engine for InvoiceHound.
 Escalation schedule (measured from invoice due_date):
   Day 1  → Polite Slack message to the team channel (client hasn't paid yet)
   Day 7  → Firmer Slack message (nudge tone)
-  Day 14 → Formal SendGrid email to client with full HTML invoice embedded
+  Day 14 → Formal SendGrid email to client with invoice PDF attachment
 
 All actions are real side-effects when dry_run=False.
 """
 
 from __future__ import annotations
 
-import base64
 import json
 from datetime import date, timedelta
 from typing import Any, Dict
@@ -19,6 +18,12 @@ from typing import Any, Dict
 from multi_agent_system.invoice_engine import InvoiceEngine, InvoiceRecord
 from multi_agent_system.integrations.sendgrid_client import SendGridClient
 from multi_agent_system.integrations.slack_client import SlackClient
+
+try:
+    from weasyprint import HTML as WeasyprintHTML
+    _WEASYPRINT_OK = True
+except Exception:
+    _WEASYPRINT_OK = False
 
 
 class ReminderEngine:
@@ -46,19 +51,19 @@ class ReminderEngine:
     def _slack_blocks_day1(self, inv: InvoiceRecord) -> list:
         return [
             {"type": "header",
-             "text": {"type": "plain_text", "text": f"Invoice due today: {inv.project_name}"}},
+             "text": {"type": "plain_text", "text": f"Invoice sent: {inv.project_name}"}},
             {"type": "section",
              "text": {"type": "mrkdwn",
                       "text": (
-                          f"Invoice *{inv.invoice_id}* for *{inv.client_name}* is due today.\n\n"
-                          f"*Total bill for project {inv.project_name}:* {inv.currency} {inv.total_amount:,.2f}\n"
+                          f"Invoice *{inv.invoice_id}* for *{inv.client_name}* was just sent.\n\n"
+                          f"*Your total bill is:* {inv.currency} {inv.total_amount:,.2f}\n"
                           f"*Due date:* {inv.due_date}\n\n"
-                          "This is an FYI with the total due. "
+                          "This is a friendly heads-up with the total bill. "
                           "InvoiceHound will handle follow-ups automatically if unpaid."
                       )}},
             {"type": "context",
              "elements": [{"type": "mrkdwn",
-                           "text": "InvoiceHound • Day 1 • Total due notice (polite)"}]},
+                          "text": "InvoiceHound • Day 1 • Invoice sent notice (polite)"}]},
         ]
 
     def _slack_blocks_day7(self, inv: InvoiceRecord) -> list:
@@ -262,11 +267,22 @@ InvoiceHound Automated Collections
             subject = self._email_subject_day14(inv)
             body_text = self._email_body_day14(inv)
             body_html = self._email_html_day14(inv)
+            pdf_bytes = None
+            if _WEASYPRINT_OK:
+                try:
+                    client_invoice_html = self._invoice_engine.generate_html(
+                        inv, include_internal_split=False, show_status_banner=False
+                    )
+                    pdf_bytes = WeasyprintHTML(string=client_invoice_html).write_pdf()
+                except Exception:
+                    pdf_bytes = None
             if not self.dry_run:
                 receipt = self.sendgrid_client.send_email(
                     subject=subject,
                     plain_text=body_text,
                     html_text=body_html,
+                    pdf_bytes=pdf_bytes,
+                    pdf_filename=f"InvoiceHound_{inv.invoice_id}.pdf",
                 )
                 result["receipts"]["email"] = receipt
             else:

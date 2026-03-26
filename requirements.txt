@@ -1,6 +1,7 @@
 openai
 sendgrid
 groq
+google-genai
 flask
 pyautogen
 redis

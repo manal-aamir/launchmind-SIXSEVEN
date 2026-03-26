@@ -4,34 +4,32 @@ from __future__ import annotations
 
 import json
 import os
-import time
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
+from multi_agent_system.deepseek_client import DeepSeekClient
+from multi_agent_system.gemini_client import GeminiClient
 from multi_agent_system.models import AgentResult, TaskMessage
 
 
 class ProductAgent:
     agent_name = "product"
 
-    def __init__(self, groq_client=None) -> None:
+    def __init__(
+        self,
+        groq_client=None,
+        deepseek_client: Optional[DeepSeekClient] = None,
+        gemini_client: Optional[GeminiClient] = None,
+    ) -> None:
         self.groq = groq_client
-        self._anthropic_client = None
+        self._deepseek: Optional[DeepSeekClient] = deepseek_client
+        self._gemini: Optional[GeminiClient] = gemini_client
         self._groq_direct = None
         self._setup_clients()
 
     def _setup_clients(self) -> None:
         """Set up LLM clients directly — not through groq_client wrapper."""
-        anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
-        if anthropic_key:
-            try:
-                import anthropic
-                self._anthropic_client = anthropic.Anthropic(api_key=anthropic_key)
-                print("[PRODUCT AGENT] Anthropic client ready")
-            except Exception as e:
-                print(f"[PRODUCT AGENT] Anthropic setup failed: {e}")
-
         groq_key = os.environ.get("GROQ_API_KEY", "")
-        if groq_key and not self._anthropic_client:
+        if groq_key:
             try:
                 from groq import Groq
                 self._groq_direct = Groq(api_key=groq_key)
@@ -39,22 +37,52 @@ class ProductAgent:
             except Exception as e:
                 print(f"[PRODUCT AGENT] Groq direct setup failed: {e}")
 
-    def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
-        """Call LLM directly — tries Anthropic first, then Groq."""
-        if self._anthropic_client:
-            try:
-                print("[PRODUCT AGENT] Calling Anthropic Claude...")
-                response = self._anthropic_client.messages.create(
-                    model="claude-sonnet-4-20250514",
-                    max_tokens=2000,
-                    system=system_prompt,
-                    messages=[{"role": "user", "content": user_prompt}],
+        if self._deepseek is None:
+            ds_key = os.environ.get("DEEPSEEK_API_KEY", "")
+            if ds_key:
+                self._deepseek = DeepSeekClient(
+                    api_key=ds_key,
+                    model=os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"),
                 )
-                text = response.content[0].text
-                print(f"[PRODUCT AGENT] Anthropic responded ({len(text)} chars)")
-                return text
-            except Exception as e:
-                print(f"[PRODUCT AGENT] Anthropic failed: {e}")
+                print("[PRODUCT AGENT] DeepSeek client ready (from env)")
+
+        if self._gemini is None:
+            gk = os.environ.get("GEMINI_API_KEY", "")
+            if gk:
+                self._gemini = GeminiClient(
+                    api_key=gk,
+                    model=os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
+                )
+                print("[PRODUCT AGENT] Gemini client ready (from env)")
+
+    def _call_deepseek(self, system_prompt: str, user_prompt: str) -> str:
+        if not self._deepseek or not self._deepseek.enabled:
+            return ""
+        try:
+            print("[PRODUCT AGENT] Calling DeepSeek...")
+            text = self._deepseek.complete_text(system_prompt, user_prompt, temperature=0.3)
+            if text:
+                print(f"[PRODUCT AGENT] DeepSeek responded ({len(text)} chars)")
+            return text
+        except Exception as e:
+            print(f"[PRODUCT AGENT] DeepSeek failed: {e}")
+            return ""
+
+    def _call_gemini(self, system_prompt: str, user_prompt: str) -> str:
+        if not self._gemini or not self._gemini.enabled:
+            return ""
+        try:
+            print("[PRODUCT AGENT] Calling Gemini...")
+            text = self._gemini.complete_text(system_prompt, user_prompt, temperature=0.35)
+            if text:
+                print(f"[PRODUCT AGENT] Gemini responded ({len(text)} chars)")
+            return text
+        except Exception as e:
+            print(f"[PRODUCT AGENT] Gemini failed: {e}")
+            return ""
+
+    def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
+        """Call LLM directly — tries Groq first, then DeepSeek/Gemini."""
 
         if self._groq_direct:
             try:
@@ -71,26 +99,19 @@ class ProductAgent:
                 print(f"[PRODUCT AGENT] Groq responded ({len(text)} chars)")
                 return text
             except Exception as e:
-                err = str(e)
+                err = str(e).lower()
                 if "429" in err or "rate_limit" in err:
-                    print("[PRODUCT AGENT] Groq rate limit hit — waiting 30s then retrying...")
-                    time.sleep(30)
-                    try:
-                        response = self._groq_direct.chat.completions.create(
-                            model="llama-3.3-70b-versatile",
-                            messages=[
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_prompt},
-                            ],
-                            temperature=0.3,
-                        )
-                        text = response.choices[0].message.content or ""
-                        print(f"[PRODUCT AGENT] Groq retry succeeded ({len(text)} chars)")
-                        return text
-                    except Exception as e2:
-                        print(f"[PRODUCT AGENT] Groq retry also failed: {e2}")
+                    print("[PRODUCT AGENT] Groq rate limit hit — falling back to DeepSeek")
                 else:
                     print(f"[PRODUCT AGENT] Groq failed: {e}")
+
+        ds_text = self._call_deepseek(system_prompt, user_prompt)
+        if ds_text:
+            return ds_text
+
+        gm_text = self._call_gemini(system_prompt, user_prompt)
+        if gm_text:
+            return gm_text
 
         print("[PRODUCT AGENT] ALL LLM clients failed — using mock")
         return ""
@@ -136,8 +157,16 @@ class ProductAgent:
             "- personas: array of exactly 3 objects, each: {name, role, pain_point}\n"
             "  Pain points must relate to: chasing payments, calculating splits, awkward follow-ups\n"
             "- features: array of exactly 5 objects: {name, description, priority}\n"
-            "  Priority 1=highest. Must include: single invoice, hour-based split,\n"
-            "  Day 1/7/14 reminders, AI-written emails, payment notification\n"
+            "  Priority must be a UNIQUE integer from 1 to 5.\n"
+            "  Priority 1 = most important, Priority 5 = least important.\n"
+            "  NO two features can have the same priority number.\n"
+            "  Assign priorities in this order:\n"
+            "    Priority 1: Single invoice to client\n"
+            "    Priority 2: Hour-based internal payment split\n"
+            "    Priority 3: Day 1 / Day 7 / Day 14 escalating reminders\n"
+            "    Priority 4: AI-written reminder emails with tone control\n"
+            "    Priority 5: Payment notification and team settlement\n"
+            "  Each priority number must appear exactly once.\n"
             "- user_stories: array of exactly 3 strings:\n"
             "  Format: 'As a [user], I want to [action] so that [benefit]'\n"
             "- confirmation_message: one sentence confirming spec is ready\n\n"
@@ -153,7 +182,13 @@ class ProductAgent:
             "Generate the InvoiceHound product spec JSON now.\n"
             "Make the personas feel like real distinct people with specific pain points.\n"
             "Make the user stories specific and actionable.\n"
-            "Every feature must clearly relate to InvoiceHound's core value."
+            "Every feature must clearly relate to InvoiceHound's core value.\n\n"
+            "IMPORTANT: Each feature must have a DIFFERENT priority number "
+            "(1, 2, 3, 4, 5). No duplicate priorities allowed.\n\n"
+            "Generate completely fresh, original content every time.\n"
+            "Do NOT reuse the same names, roles, or pain points from previous runs.\n"
+            "Choose different persona names from diverse backgrounds each run.\n"
+            "Vary the writing style, sentence structure, and specific examples used."
         )
 
         text = self._call_llm(system_prompt, user_prompt)

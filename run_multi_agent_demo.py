@@ -18,6 +18,7 @@ from pathlib import Path
 from multi_agent_system.agents.ceo import CEOAgent
 from multi_agent_system.env_utils import load_dotenv_file
 from multi_agent_system.deepseek_client import DeepSeekClient
+from multi_agent_system.gemini_client import GeminiClient
 from multi_agent_system.groq_client import GroqClient
 from multi_agent_system.integrations.github_client import GitHubClient
 from multi_agent_system.integrations.sendgrid_client import SendGridClient
@@ -60,10 +61,15 @@ def main() -> None:
         api_key=env.get("DEEPSEEK_API_KEY", ""),
         model=env.get("DEEPSEEK_MODEL", "deepseek-chat"),
     )
+    gemini_client = GeminiClient(
+        api_key=env.get("GEMINI_API_KEY", ""),
+        model=env.get("GEMINI_MODEL", "gemini-2.0-flash"),
+    )
     groq_client = GroqClient(
         api_key=env.get("GROQ_API_KEY", ""),
         model=env.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
         fallback=deepseek_client,
+        gemini_fallback=gemini_client,
     )
     github_client = GitHubClient(
         token=env.get("GITHUB_TOKEN", ""),
@@ -85,6 +91,8 @@ def main() -> None:
 
     ceo = CEOAgent(
         groq_client=groq_client,
+        deepseek_client=deepseek_client,
+        gemini_client=gemini_client,
         redis_bus=redis_bus,
         slack_client=slack_client,
         github_client=github_client,

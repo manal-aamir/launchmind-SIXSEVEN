@@ -37,6 +37,8 @@ from multi_agent_system.agents.qa import QAAgent
 from multi_agent_system.groq_client import GroqClient
 from multi_agent_system.integrations.github_client import GitHubClient
 from multi_agent_system.integrations.sendgrid_client import SendGridClient
+from multi_agent_system.deepseek_client import DeepSeekClient
+from multi_agent_system.gemini_client import GeminiClient
 from multi_agent_system.integrations.slack_client import SlackClient
 from multi_agent_system.redis_bus import RedisBus
 from multi_agent_system.models import (
@@ -60,6 +62,8 @@ class CEOAgent:
         dry_run_actions: bool = True,
         max_revisions: int = 2,           # multiple feedback loops — bonus +2%
         redis_bus: Optional[RedisBus] = None,  # Redis pub/sub transport (bonus)
+        deepseek_client: Optional[DeepSeekClient] = None,  # Product agent fallback when Groq rate-limits
+        gemini_client: Optional[GeminiClient] = None,  # Product agent fallback after DeepSeek
     ) -> None:
         self.groq             = groq_client   # Groq — all agent LLM work
         self.redis_bus       = redis_bus
@@ -83,7 +87,11 @@ class CEOAgent:
 
         # Sub-agents — each gets the appropriate LLM client
         # Product agent is Groq-only as per bonus requirement.
-        self.product_agent   = ProductAgent(groq_client)
+        self.product_agent   = ProductAgent(
+            groq_client,
+            deepseek_client=deepseek_client,
+            gemini_client=gemini_client,
+        )
         # Engineer agent is Groq-only (LLM generation) + real GitHub actions.
         self.engineer_agent  = EngineerAgent(
             groq_client, github_client=github_client, dry_run=dry_run_actions
