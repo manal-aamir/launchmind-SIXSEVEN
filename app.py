@@ -732,8 +732,58 @@ def mark_paid(invoice_id):
         record["paid"] = True
         record["payment_splits"] = result["splits"]
         record["split_slack_receipt"] = result["slack_receipt"]
+        record.setdefault("team_payout_email_receipts", [])
+
+        # Email each team member their earnings statement as a PDF attachment
+        if execute_actions:
+            if not _WEASYPRINT_OK:
+                record["team_payout_email_receipts"].append(
+                    {"ok": False, "error": "weasyprint not available; cannot generate payout PDFs"}
+                )
+            else:
+                for member in inv.team_members:
+                    name = (member.name or "").strip()
+                    to_email = (member.email or "").strip()
+                    split = (result.get("splits") or {}).get(name) or {}
+                    amount = float(split.get("amount", 0) or 0)
+                    if not name or not to_email:
+                        continue
+                    try:
+                        html_member = invoice_engine.generate_member_invoice_html(inv, name)
+                        pdf_bytes = WeasyprintHTML(string=html_member).write_pdf()
+                        subject = f"Earnings statement — {inv.project_name} ({inv.invoice_id})"
+                        plain_body = (
+                            f"Dear {name},\n\n"
+                            f"Payment has been received for {inv.project_name} (Invoice {inv.invoice_id}).\n\n"
+                            f"Your earnings: Rs {amount:,.2f}\n"
+                            f"Hours logged: {split.get('hours', member.hours_worked)}\n\n"
+                            "Please find your PDF earnings statement attached.\n\n"
+                            "Best regards,\nInvoiceHound"
+                        )
+                        sg = SendGridClient(
+                            api_key=env.get("SENDGRID_API_KEY", ""),
+                            from_email=env.get("SENDGRID_FROM_EMAIL", ""),
+                            to_email=to_email,
+                        )
+                        receipt = sg.send_email(
+                            subject=subject,
+                            plain_text=plain_body,
+                            html_text=f"<pre style='font-family:Arial,sans-serif;font-size:14px'>{plain_body}</pre>",
+                            pdf_bytes=pdf_bytes,
+                            pdf_filename=f"Earnings_{inv.invoice_id}_{name.replace(' ','_')}.pdf",
+                        )
+                        record["team_payout_email_receipts"].append(
+                            {"member": name, "email": to_email, "amount": amount, "receipt": receipt}
+                        )
+                    except Exception as exc:
+                        record["team_payout_email_receipts"].append(
+                            {"member": name, "email": to_email, "amount": amount, "error": str(exc)}
+                        )
         _save(record)
-        flash(f"Payment received! Team splits calculated and posted to Slack.", "success")
+        flash(
+            "Payment received! Team splits calculated, Slack notified, and payout PDFs emailed to team.",
+            "success",
+        )
     except Exception as e:
         flash(f"Error: {e}", "error")
     return redirect(url_for("dashboard"))
