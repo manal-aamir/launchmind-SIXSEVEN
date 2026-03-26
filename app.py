@@ -742,7 +742,10 @@ def mark_paid(invoice_id):
                 )
             else:
                 for member in inv.team_members:
-                    name = (member.name or "").strip()
+                    # IMPORTANT: payment_splits keys are created from the exact
+                    # `member.name` strings used during invoice creation.
+                    # Do not strip/normalize here; otherwise .get(name) won't match.
+                    name = member.name or ""
                     to_email = (member.email or "").strip()
                     split = (result.get("splits") or {}).get(name) or {}
                     amount = float(split.get("amount", 0) or 0)
@@ -765,12 +768,13 @@ def mark_paid(invoice_id):
                             from_email=env.get("SENDGRID_FROM_EMAIL", ""),
                             to_email=to_email,
                         )
+                        file_member = name.strip().replace(" ", "_")
                         receipt = sg.send_email(
                             subject=subject,
                             plain_text=plain_body,
                             html_text=f"<pre style='font-family:Arial,sans-serif;font-size:14px'>{plain_body}</pre>",
                             pdf_bytes=pdf_bytes,
-                            pdf_filename=f"Earnings_{inv.invoice_id}_{name.replace(' ','_')}.pdf",
+                            pdf_filename=f"Earnings_{inv.invoice_id}_{file_member}.pdf",
                         )
                         record["team_payout_email_receipts"].append(
                             {"member": name, "email": to_email, "amount": amount, "receipt": receipt}
