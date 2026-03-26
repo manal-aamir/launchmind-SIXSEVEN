@@ -58,7 +58,7 @@ python3 app.py
 ## Slack workspace link / screenshots
 
 Add your Slack invite link here (or include screenshots of the bot posting in `#launches`):
-- Slack invite: *(add your link)*
+- Slack invite: *https://app.slack.com/client/T71NF2AUX/C0ANVB4HEE8*
 
 ---
 
