@@ -15,7 +15,7 @@ and ensure GROQ_API_KEY is set in .env.
 import json
 from pathlib import Path
 
-from multi_agent_system.agents.ceo import CEOAgent
+from agents.ceo_agent import CEOAgent
 from multi_agent_system.env_utils import load_dotenv_file
 from multi_agent_system.deepseek_client import DeepSeekClient
 from multi_agent_system.gemini_client import GeminiClient

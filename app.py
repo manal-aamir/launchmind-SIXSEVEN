@@ -31,7 +31,7 @@ from flask import Flask, flash, redirect, render_template, request, url_for, Res
 # In-memory pipeline state dict: { invoice_id: { ...status fields... } }
 _pipeline_states: dict = {}
 
-from multi_agent_system.agents.ceo import CEOAgent
+from agents.ceo_agent import CEOAgent
 from multi_agent_system.env_utils import load_dotenv_file
 from multi_agent_system.deepseek_client import DeepSeekClient
 from multi_agent_system.gemini_client import GeminiClient

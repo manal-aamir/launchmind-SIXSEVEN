@@ -457,28 +457,41 @@ class InvoiceEngine:
     </div>
   </div>
 
-  <!-- Earnings breakdown -->
+  <!-- Earnings breakdown (hours-based across total invoice, excluding GST) -->
   <div class="items-section">
-    <div class="section-title">Earnings Breakdown</div>
+    <div class="section-title">EARNINGS BREAKDOWN</div>
     <table class="items">
       <thead>
         <tr>
-          <th style="text-align:left">Description</th>
-          <th style="text-align:center">Your Share</th>
-          <th style="text-align:right">Project Total</th>
-          <th style="text-align:right">Your Earnings</th>
+          <th style="text-align:left">Line Item</th>
+          <th style="text-align:right">Value</th>
         </tr>
       </thead>
       <tbody>
-        {"".join(
-            f"<tr style='background:{'#fff' if i%2==0 else '#f9fafb'}'>"
-            f"<td>{item.description}</td>"
-            f"<td style='text-align:center'>{data['percentage']}%</td>"
-            f"<td style='text-align:right'>{inv.currency} {item.total:,.2f}</td>"
-            f"<td style='text-align:right;font-weight:600'>{inv.currency} {round(item.total * data['percentage']/100, 2):,.2f}</td>"
-            f"</tr>"
-            for i, item in enumerate(inv.line_items)
-        )}
+        <tr style="background:#fff">
+          <td>Total project invoice (excl. GST)</td>
+          <td style="text-align:right">{inv.currency} {inv.total_amount:,.2f}</td>
+        </tr>
+        <tr style="background:#f9fafb">
+          <td>Your hours</td>
+          <td style="text-align:right">{data['hours']}h of {total_hours}h total</td>
+        </tr>
+        <tr style="background:#fff">
+          <td>Your share percentage</td>
+          <td style="text-align:right">{data['percentage']}%</td>
+        </tr>
+        <tr style="background:#f9fafb">
+          <td style="font-weight:700;color:#166534">Your earnings (excl. GST)</td>
+          <td style="text-align:right;font-weight:700;color:#166534">{inv.currency} {subtotal:,.2f}</td>
+        </tr>
+        <tr style="background:#fff">
+          <td>GST (10%)</td>
+          <td style="text-align:right">{inv.currency} {gst:,.2f}</td>
+        </tr>
+        <tr style="background:#f9fafb">
+          <td style="font-weight:800;color:#166534">YOUR TOTAL</td>
+          <td style="text-align:right;font-weight:800;color:#166534">{inv.currency} {total:,.2f}</td>
+        </tr>
       </tbody>
     </table>
   </div>
