@@ -5,6 +5,8 @@ InvoiceHound is a tool for freelance teams that generates **one professional cli
 This repository contains a 5-agent Multi‑Agent System (MAS) that runs end‑to‑end: the CEO decomposes tasks, Product writes the product spec, Engineer generates a landing page and opens a GitHub PR, Marketing prepares launch assets and posts to Slack, and QA reviews and comments on the PR.
 
 ---
+<img width="1395" height="491" alt="Screenshot 2026-03-26 at 3 36 45 PM" src="https://github.com/user-attachments/assets/bc128ed6-23f1-4575-a28b-e83ea4065503" />
+
 
 ## Agent architecture (who talks to who)
 
