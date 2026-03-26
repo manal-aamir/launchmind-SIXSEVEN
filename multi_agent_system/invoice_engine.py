@@ -128,9 +128,6 @@ class InvoiceEngine:
         except Exception:
             days_until_due = 14
 
-        # Sender name: first team member (team lead) or project name
-        sender_name = inv.team_members[0].name if inv.team_members else inv.project_name
-
         item_rows = ""
         for idx, item in enumerate(inv.line_items, 1):
             bg = "#ffffff" if idx % 2 else "#f9fafb"
@@ -299,8 +296,9 @@ class InvoiceEngine:
     </div>
     <div class="party">
       <div class="party-label">From</div>
-      <div class="party-name">{sender_name}</div>
+      <div class="party-name">{inv.project_name} Team</div>
       <div class="party-detail">
+        <strong>Powered by InvoiceHound</strong><br>
         Issued: {inv.issue_date}
       </div>
     </div>

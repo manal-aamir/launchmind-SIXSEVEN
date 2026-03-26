@@ -60,13 +60,11 @@
 
   {% if inv.team_assignments %}
   <details style="margin-bottom:14px">
-    <summary style="cursor:pointer;color:#94a3b8;font-size:13px">Product-agent task assignments</summary>
+    <summary style="cursor:pointer;color:#94a3b8;font-size:13px">InvoiceHound Product Features</summary>
     <table style="margin-top:8px">
-      <tr><th>Member</th><th>Role</th><th>Assigned task</th><th>Priority</th></tr>
+      <tr><th>Feature</th><th>Description</th><th>Priority</th></tr>
       {% for a in inv.team_assignments %}
       <tr>
-        <td>{{ a.member_name }}</td>
-        <td style="color:#94a3b8">{{ a.member_role }}</td>
         <td>
           <div style="font-weight:600">{{ a.task_name }}</div>
           <div style="font-size:12px;color:#94a3b8">{{ a.task_description }}</div>
