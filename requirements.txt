@@ -5,3 +5,5 @@ google-genai
 flask
 pyautogen
 redis
+langgraph
+langchain-core
