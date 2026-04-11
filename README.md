@@ -86,3 +86,24 @@ Engineer agent creates a landing-page PR. Example from a real run:
 ├── .gitignore
 └── multi_agent_system/            # full implementation (wrappers above call into this)
 ```
+## Group Members:
+Manal Aamir 22I-1940
+Aqsa Fayaz 22I-1865
+Arhum Khan 22I-1967
+
+## Team Member Roles & Agent Assignments
+
+The workload and responsibilities for the 5 ReAct agents were distributed among the team members as follows:
+
+Manal
+
+CEO Agent: Developed the core orchestration agent that manages message routing, state, decision tracking, and retries across the system.
+Product Agent: Implemented the agent responsible for taking initial user prompts to generate clear product specifications and structured expected outputs.
+Arhum
+
+Engineer Agent: Built the engineering agent designed to safely generate code (HTML/CSS) and integrate with GitHub for automated pull request and branch creation.
+Marketing Agent: Developed the marketing agent responsible for generating outbound copy, landing page hooks, and handling external communication hooks.
+Aqsa
+
+QA Agent: Implemented the reviewer agent that programmatically tests the generated HTML and marketing copy, enforces regression tests, and posts inline PR comments.
+Integration & Cross-Agent Logic: Mapped the Slack, SendGrid, and GitHub tools into the pipeline to ensure seamless data passing across all the agent workflows.
